@@ -1,0 +1,5 @@
+
+
+class Quadratic(object):
+    """ """
+    pass
