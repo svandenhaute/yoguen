@@ -1,9 +1,14 @@
+import numpy as np
 import automap
 from pathlib import Path
 
 from systems import get_system
 
 
-def test_representation_basic(tmp_path):
+def test_basis(tmp_path):
     atoms = get_system('uio66')
-    prep = automap.PeriodicRepresentation(atoms)
+    ndof = 3 * len(atoms)
+    prep = automap.PeriodicBasis(
+            atoms,
+            np.zeros((ndof, ndof)),
+            )

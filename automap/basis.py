@@ -31,6 +31,7 @@ class PeriodicBasis(object):
         self.fixed_cell = fixed_cell
 
         # assert correct dimensions of transformation matrix
+        natom = len(atoms)
         if fixed_cell:
             assert transform.shape == (3 * natom, 3 * natom)
 

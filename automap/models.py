@@ -3,4 +3,5 @@
 class Quadratic(object):
     """ """
 
-    def __init__(representation)
+    def __init__(representation):
+        pass
