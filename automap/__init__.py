@@ -1,0 +1,1 @@
+from automap.representations import PeriodicRepresentation

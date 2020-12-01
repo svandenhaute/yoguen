@@ -1,4 +1,4 @@
-import ase
+import ase.io
 
 from pathlib import Path
 
