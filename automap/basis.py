@@ -19,8 +19,8 @@ class PeriodicBasis(object):
             provides the (mass-unweighted) transformation matrix between the
             atomic cartesian coordinates and the new basis. The shape of this
             transform is determined by the number of atoms in the system and
-            whether or not the cell is considered fixed. If this is the case,
-            then the shape should be (3 * natom, 3 * natom).
+            the value of fixed_cell. If fixed_cell is True, then the shape
+            should be (3 * natom, 3 * natom).
 
         fixed_cell (bool):
             determines whether the coordinates are included as variables or are

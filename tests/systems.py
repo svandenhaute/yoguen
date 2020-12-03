@@ -1,4 +1,5 @@
 import ase.io
+import numpy as np
 
 from pathlib import Path
 
@@ -7,7 +8,10 @@ from pathlib import Path
 def _get_uio66():
     path_system = Path.cwd() / 'uio66'
     atoms = ase.io.read(path_system / 'conventional.cif')
-    return atoms
+    hessian  = np.load(path_system / 'hessian_conventional.npy')
+    geometry = np.load(path_system / 'geometry_conventional.npy')
+    cell = np.load(path_system / 'cell_conventional.npy')
+    return atoms, (geometry, cell, hessian)
 
 
 def get_system(name):
