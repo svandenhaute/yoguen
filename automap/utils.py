@@ -13,8 +13,8 @@ def get_units():
     return u
 
 
-def get_reduced_basis(atoms, mw=False):
-    """Creates basis for reduced coordinates
+def get_internal_basis(atoms, mw=False):
+    """Creates basis for internal coordinates
 
     If the system is periodic, then only three global translations are removed.
     If the system is aperiodic, then additionally three global rotations are
@@ -27,7 +27,7 @@ def get_reduced_basis(atoms, mw=False):
         Atoms instance of the system
 
     mw (bool):
-        whether or not to construct the reduced basis for mass-weighted
+        whether or not to construct the internal basis for mass-weighted
         coordinates.
 
     """
@@ -86,6 +86,59 @@ def compute_entropy_quantum(f, T):
         return s_quantum
     else:
         raise ValueError('Entropy at 0Hz is infinite')
+
+
+def get_cluster_positions(atoms, clustering):
+    """Computes the positions of the clusters"""
+    ncluster = clustering.get_ncluster()
+    indices  = clustering.get_indices()
+    pos_c    = np.zeros((ncluster, 3))
+    pos      = atoms.get_positions()
+    masses   = atoms.get_masses()
+
+    for i, group in enumerate(indices):
+        # compute total mass of group
+        mass = np.sum(masses[np.array(group)])
+
+        # first atom is used as reference. COM is computed using relative
+        # vectors only, in order to apply the mic consistently 
+        index_ref = group[0]
+        pos_c[i, :] = pos[index_ref, :]
+        for i in range(1, len(group)):
+            index = group[i]
+            delta = atoms.get_distance(index_ref, index, mic=True, vector=True)
+            pos_c[i, :] += masses[index] / mass * delta
+    return pos_c
+
+
+def get_cluster_elements(atoms, clustering):
+    """Returns elements of clusters
+
+    Clusters that are chemically equivalent should have the same element.
+    Clusters containing only one atom should have the element of that atom.
+    Cluster elements start at 118 and count backward.
+
+    """
+    ncluster  = clustering.get_ncluster()
+    indices   = clustering.get_indices()
+    numbers   = atoms.get_atomic_numbers()
+    numbers_c = np.zeros(ncluster)
+
+    cluster_elements = {}
+    new_key = 118
+
+    for i, group in enumerate(indices):
+        if len(group) == 1: # if only one atom, then number is same
+            numbers_c[i] = numbers[group[0]]
+        else: # if multiple atoms, then start at 118
+            numbers_in_group = set(numbers[np.array(group)])
+            for key, value in cluster_elements.items():
+                if value == numbers_in_group:
+                    numbers_c[i] = key
+                else:
+                    cluster_elements[new_key] = numbers_in_group
+                    new_key -= 1
+    return numbers_c
 
 
 #def infer_bonds(atoms, mic=True, thresh=2.5):

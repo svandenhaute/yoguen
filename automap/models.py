@@ -1,6 +1,6 @@
 import numpy as np
 
-from automap.utils import get_mass_matrix, get_reduced_basis, \
+from automap.utils import get_mass_matrix, get_internal_basis, \
         compute_entropy_quantum
 
 
