@@ -1,5 +1,6 @@
 import numpy as np
 import automap
+import molmod
 from pathlib import Path
 
 from systems import get_system
@@ -29,3 +30,6 @@ def test_quadratic(tmp_path):
     assert len(values) == len(atoms) * 3 - 3
     frequencies = np.sqrt(np.abs(values)) / (2 * np.pi) / UNIT_INVCM
     assert np.linalg.norm(frequencies[:3]) > 1e-1 # first 3 eigenvalues NONzero
+
+    # compute entropy and check with reference value of 5.328 kJ/(mol K)
+    assert abs(quad.compute_entropy(300) - 5.328) < 1e-2

@@ -1,6 +1,7 @@
 import numpy as np
 
-from automap.utils import get_mass_matrix, get_reduced_basis
+from automap.utils import get_mass_matrix, get_reduced_basis, \
+        compute_entropy_quantum
 
 
 class Quadratic(object):
@@ -47,23 +48,22 @@ class Quadratic(object):
             self.cell = None
             raise NotImplementedError
 
-
         ############################################################
         # ALLOCATE ARRAYS TO STORE EIGENVECTORS AND EIGENVALUES
         # 
-        # modes / values:
+        # plain:
         #   array of all eigenvectors of the plain hessian matrix on its
         #   columns
         # 
-        # modes_mw / values_mw:
+        # mw:
         #   array of all eigenvectors of the mass-weighted hessian
         #   matrix.
         #
-        # modes_mw_r / values_mw_r:
+        # reduced:
         #   array of subset of eigenvectors of the mass-weighted
         #   hessian; the excluded eigenvectors are those belonging to
         #   global translations (and rotations in case of nonperiodic
-        #   systems). The r suffix stands for 'reduced'.
+        #   systems).
         ############################################################
         self.modes  = {}
         self.values = {}
@@ -120,3 +120,18 @@ class Quadratic(object):
             v.sort()
         self.modes[kind][:] = v
         self.values[kind][:] = w
+
+    def compute_entropy(self, T=300):
+        """Computes the (quantum) entropy based on the hessian eigenvalues.
+
+        The entropy is returned in kJ/(mol K).
+
+        Arguments
+        ---------
+
+        T (double):
+            temperature in kelvin.
+
+        """
+        _, omegas2 = self.get_modes_values(kind='reduced')
+        return np.sum(compute_entropy_quantum(np.sqrt(omegas2) / (2 * np.pi), T))

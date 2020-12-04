@@ -1,3 +1,4 @@
+import molmod
 import numpy as np
 
 from ase.units import create_units
@@ -69,28 +70,20 @@ def get_mass_matrix(atoms):
     return weights
 
 
-def _entropy_quantum(f, T):
+def compute_entropy_quantum(f, T):
+    u = get_units()
     if (f > 0).all():
-        h = molmod.constants.planck
-        k = molmod.constants.boltzmann
-        beta = 1 / (molmod.constants.boltzmann * T)
-        q_quantum = np.exp(- (beta * h * f) / 2) / (1 - np.exp(- beta * h * f))
+        h = u._hplanck # in J s
+        k = u._k # in J / K
+        f_si = f / u._aut # frequencies in Hz
+        beta = 1 / (k * T)
+        thetas = beta * h * f_si # dimensionless
+        q_quantum = np.exp(- thetas / 2) / (1 - np.exp(- thetas))
         f_quantum = - np.log(q_quantum) / beta
-        s_quantum = -k * np.log(1 - np.exp(- beta * h * f)) + h * f / T * (np.exp(beta * h * f) - 1) ** (-1)
+        s_quantum = -k * (np.log(1 - np.exp(- thetas)) - thetas * (np.exp(thetas) - 1) ** (-1))
+        s_quantum /= 1000
+        s_quantum *= u._Nav
         return s_quantum
-    else:
-        raise ValueError('Entropy at 0Hz is infinite')
-
-
-def _entropy_classical(f, T=300):
-    if (f > 0).all():
-        h = molmod.constants.planck
-        k = molmod.constants.boltzmann
-        beta = 1 / (molmod.constants.boltzmann * T)
-        q_classical = 1 / (beta * h * f)
-        f_classical = - np.log(q_classical) / beta
-        s_classical = k * (1 + np.log(k * T / (h * f)))
-        return s_classical
     else:
         raise ValueError('Entropy at 0Hz is infinite')
 
