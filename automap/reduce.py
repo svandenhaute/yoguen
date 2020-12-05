@@ -70,14 +70,14 @@ class Reduction(ABC):
         KN = np.transpose(KNT) # generalized row space of mapping
 
         # transform hessian into generalized row space, create blocks
-        hessian_row = np.tranpose(KN) @ hessian_ic @ KN
+        hessian_row = np.transpose(KN) @ hessian_ic @ KN
         size = mapping_ic.shape[0]
         hessian_11 = hessian_row[:size, :size]
         hessian_12 = hessian_row[:size, size:]
         hessian_22 = hessian_row[size:, size:]
 
         # diagonalize lower right block to obtain frequencies; compute entropy
-        _, omegas = np.linalg.eigh(hessian_22)
+        omegas, _ = np.linalg.eigh(hessian_22)
         frequencies = np.sqrt(omegas) / (2 * np.pi)
         return np.sum(compute_entropy_quantum(frequencies, T))
 

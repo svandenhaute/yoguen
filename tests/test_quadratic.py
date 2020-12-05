@@ -10,7 +10,12 @@ UNIT_INVCM = 7.251632778591094e-07
 
 
 def test_quadratic(tmp_path):
-    atoms, (geometry, cell, hessian) = get_system('uio66')
+    system   = get_system('uio66') # get system input
+    atoms    = system['atoms']
+    geometry = system['geometry']
+    cell     = system['cell']
+    hessian  = system['hessian']
+
     quad = automap.Quadratic(atoms, hessian, geometry, cell)
 
     # compute plain eigenvalues

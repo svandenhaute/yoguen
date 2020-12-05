@@ -98,7 +98,7 @@ class Quadratic(object):
             mm = get_mass_matrix(self.atoms)
             return np.sqrt(mm)
         elif kind == 'reduced':
-            basis = get_reduced_basis(self.atoms, mw=True)
+            basis = get_internal_basis(self.atoms, mw=True)
             return basis
 
     def _compute_modes_values(self, kind):
@@ -114,7 +114,7 @@ class Quadratic(object):
         elif kind == 'reduced': # compute reduced
             _ = np.sqrt(get_mass_matrix(self.atoms))
             hessian_m = np.linalg.inv(_) @ self.hessian @ np.linalg.inv(_)
-            basis = get_reduced_basis(self.atoms, mw=True)
+            basis = get_internal_basis(self.atoms, mw=True)
             hessian_r = basis.T @ hessian_m @ basis
             w, v = np.linalg.eigh(hessian_r)
             v.sort()

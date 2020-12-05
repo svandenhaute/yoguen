@@ -35,18 +35,25 @@ class Clustering(object):
         self.clusters    = np.eye(len(self.atoms), dtype=np.dtype(int))
         self.projection  = np.eye(len(self.atoms))
 
-    def apply(self, pair):
-        """Clusters a pair of particles
+    def update_indices(self, indices):
+        """Rebuilds the clusters and projection arrays based on new indices
 
         Arguments
         ---------
 
-        pair (tuple):
-            tuple containing two integers that refer to the particles
-            which should be clustered.
+        indices (tuple of tuples):
+            tuple of atom index tuples that describes the clustering
 
         """
-        raise NotImplementedError
+        self.clusters[:]   = 0
+        self.projection[:] = 0.0
+        masses = self.atoms.get_masses()
+        for i, group in enumerate(indices):
+            self.clusters[i, np.array(group)] = 1
+            total_mass = np.sum(masses[np.array(group)])
+            for atom in group:
+                self.projection[i, atom] = np.sqrt(masses[atom] / total_mass)
+        self.validate() # validate current clustering
 
     @staticmethod
     def _cluster_pair(pair, clusters, projection, indices, masses):
@@ -90,16 +97,26 @@ class Clustering(object):
 
     def get_mapping(self):
         """Constructs the mapping matrix"""
-        pass
+        masses  = self.atoms.get_masses()
+        indices = self.get_indices()
+        mapping = np.zeros((3 * self.get_ncluster(), 3 * len(self.atoms)))
+        for i, group in enumerate(indices):
+            weights = masses[np.array(group)]
+            weights /= np.sum(weights)
+            for j, atom in enumerate(group):
+                mapping[3 * i, 3 * atom] = weights[j]
+                mapping[3 * i + 1, 3 * atom + 1] = weights[j]
+                mapping[3 * i + 2, 3 * atom + 2] = weights[j]
+        return mapping
 
     def get_indices(self):
         """Returns the atom indices for each cluster (as a tuple)"""
         indices = []
         natom = 0
         for i in range(self.get_ncluster()):
-            nonzero = self.clusters[i].nonzero()
+            nonzero = self.clusters[i].nonzero()[0]
             assert len(nonzero) > 0
-            indices.append(nonzero)
+            indices.append(tuple(nonzero))
             natom += len(nonzero)
         assert natom == len(self.atoms)
         return tuple(indices)
@@ -146,4 +163,9 @@ class Clustering(object):
             for j in range(len(self.atoms)):
                 if self.clusters[i, j] != 0:
                     assert self.projection[i, j] > 0
+
+        # checks indices calculation
+        indices = self.get_indices()
+        for i, group in enumerate(indices):
+            assert np.all(self.clusters[i, np.array(group)])
         return True

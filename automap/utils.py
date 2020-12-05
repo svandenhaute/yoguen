@@ -104,8 +104,8 @@ def get_cluster_positions(atoms, clustering):
         # vectors only, in order to apply the mic consistently 
         index_ref = group[0]
         pos_c[i, :] = pos[index_ref, :]
-        for i in range(1, len(group)):
-            index = group[i]
+        for j in range(1, len(group)):
+            index = group[j]
             delta = atoms.get_distance(index_ref, index, mic=True, vector=True)
             pos_c[i, :] += masses[index] / mass * delta
     return pos_c

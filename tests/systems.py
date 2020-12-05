@@ -1,3 +1,4 @@
+import yaml
 import ase.io
 import numpy as np
 
@@ -11,7 +12,22 @@ def _get_uio66():
     hessian  = np.load(path_system / 'hessian_conventional.npy')
     geometry = np.load(path_system / 'geometry_conventional.npy')
     cell = np.load(path_system / 'cell_conventional.npy')
-    return atoms, (geometry, cell, hessian)
+    clusters = np.load(path_system / 'clusters_conventional.npy')
+
+    yaml_dict = yaml.safe_load(open(path_system / 'clustering.yaml', 'rb'))
+    indices_list = yaml_dict['indices']
+    for i in range(len(indices_list)):
+        indices_list[i] = tuple(indices_list[i])
+    indices= tuple(indices_list)
+    system = {
+            'atoms': atoms,
+            'geometry': geometry,
+            'cell': cell,
+            'hessian': hessian,
+            'indices': indices,
+            'clusters': clusters,
+            }
+    return system
 
 
 def get_system(name):
