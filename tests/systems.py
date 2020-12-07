@@ -9,10 +9,10 @@ from pathlib import Path
 def _get_uio66():
     path_system = Path.cwd() / 'uio66'
     atoms = ase.io.read(path_system / 'conventional.cif')
-    hessian  = np.load(path_system / 'hessian_conventional.npy')
-    geometry = np.load(path_system / 'geometry_conventional.npy')
-    cell = np.load(path_system / 'cell_conventional.npy')
-    clusters = np.load(path_system / 'clusters_conventional.npy')
+    hessian  = np.load(path_system / 'hessian.npy')
+    geometry = np.load(path_system / 'geometry.npy')
+    cell = np.load(path_system / 'cell.npy')
+    clusters = np.load(path_system / 'clusters.npy')
 
     yaml_dict = yaml.safe_load(open(path_system / 'clustering.yaml', 'rb'))
     indices_list = yaml_dict['indices']

@@ -1,16 +1,9 @@
 import molmod
 import numpy as np
 
-from ase.units import create_units
+import ase.units
 #from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
 
-
-UNIT_INVCM = 7.251632778591094e-07
-
-
-def get_units():
-    u = create_units('2014')
-    return u
 
 
 def get_internal_basis(atoms, mw=False):
@@ -38,8 +31,6 @@ def get_internal_basis(atoms, mw=False):
         t[2, 2::3] = 1
         if mw: # apply mass weighting
             masses = atoms.get_masses()
-            u = get_units()
-            masses *= (u._amu / u._me) # convert to atomic units
             t_mw = t @ np.sqrt(np.diag(np.repeat(masses, 3)))
         _, _, vH = np.linalg.svd(t_mw)
         basis = np.transpose(vH[3:])
@@ -61,28 +52,22 @@ def get_mass_matrix(atoms):
     """
     weights = np.zeros((3 * len(atoms), 3 * len(atoms)))
     masses = atoms.get_masses()
-    u = get_units()
-    masses *= (u._amu / u._me) # convert to atomic units
     weights[:] = np.diag(np.repeat(masses, 3))
-    #for i in range(len(atoms)):
-    #    for j in range(len(atoms)):
-    #        weights[i][j] = 1 / np.sqrt(masses[i] * masses[j])
     return weights
 
 
 def compute_entropy_quantum(f, T):
-    u = get_units()
     if (f > 0).all():
-        h = u._hplanck # in J s
-        k = u._k # in J / K
-        f_si = f / u._aut # frequencies in Hz
+        h = ase.units._hplanck # in J s
+        k = ase.units._k # in J / K
+        f_si = f * ase.units.s # frequencies in Hz
         beta = 1 / (k * T)
         thetas = beta * h * f_si # dimensionless
         q_quantum = np.exp(- thetas / 2) / (1 - np.exp(- thetas))
         f_quantum = - np.log(q_quantum) / beta
         s_quantum = -k * (np.log(1 - np.exp(- thetas)) - thetas * (np.exp(thetas) - 1) ** (-1))
         s_quantum /= 1000
-        s_quantum *= u._Nav
+        s_quantum *= ase.units._Nav # to kJ/mol
         return s_quantum
     else:
         raise ValueError('Entropy at 0Hz is infinite')

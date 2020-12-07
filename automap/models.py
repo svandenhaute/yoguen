@@ -1,7 +1,10 @@
 import numpy as np
 
+from ase.units import kJ, mol
+
 from automap.utils import get_mass_matrix, get_internal_basis, \
         compute_entropy_quantum
+
 
 
 class Quadratic(object):
@@ -22,16 +25,16 @@ class Quadratic(object):
             hessian matrix containing the second-order partial derivatives of
             the PES with respect to each of the atomic coordinates. No extended
             hessians are supported for the moment.
-            in atomic units
+            in units of eV/(mol * angstrom ** 2)
 
         geometry (ndarray of shape (natom, 3)):
             equilibrium atomic geometry around which the quadratic is developed
-            in atomic units
+            in angstrom
 
         cell (None or ndarray of shape (3, 3)):
             if the system is periodic, this argument specifies the box vectors
             that correspond to the equilibrium geometry.
-            in atomic units
+            in angstrom
 
         """
         self.ndof = 3 * len(atoms)

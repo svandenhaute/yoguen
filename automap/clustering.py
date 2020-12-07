@@ -136,7 +136,7 @@ class Clustering(object):
         This function checks:
             - if each nonzero row in self.clusters is mutually orthogonal with
               every other row
-            - if each nonzero row in self.clusters_mw is normalized.
+            - if each nonzero row in self.projection is normalized.
             - if each column contains exactly one nonzero entry.
             - if self.clusters and self.projection are equivalent
 

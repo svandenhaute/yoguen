@@ -71,7 +71,7 @@ class Reduction(ABC):
 
         # transform hessian into generalized row space, create blocks
         hessian_row = np.transpose(KN) @ hessian_ic @ KN
-        size = mapping_ic.shape[0]
+        size = mapping_ic.shape[0] # depends on periodicity
         hessian_11 = hessian_row[:size, :size]
         hessian_12 = hessian_row[:size, size:]
         hessian_22 = hessian_row[size:, size:]
