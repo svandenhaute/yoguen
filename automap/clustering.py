@@ -1,7 +1,10 @@
 import numpy as np
 import ase
 
-from automap.utils import get_cluster_positions, get_cluster_elements
+from automap.utils import get_cluster_positions, get_cluster_elements, \
+        compute_entropy_quantum, compute_entropy_classical, get_mass_matrix, \
+        get_internal_basis, expand_mapping
+from automap.models import Quadratic
 
 
 class Clustering(object):
@@ -55,22 +58,190 @@ class Clustering(object):
                 self.projection[i, atom] = np.sqrt(masses[atom] / total_mass)
         self.validate() # validate current clustering
 
-    @staticmethod
-    def _cluster_pair(pair, clusters, projection, indices, masses):
-        """Clusters a pair of particles in-place
+    def apply(self, quadratic, T=300):
+        """Applies the clustering to generate the CG ``Quadratic`` instance
+
+        Both the entropies involved (atomistic, mapping and CG entropies) as
+        well as the actual CG quadratic are returned. The CG hessian is
+        computed in the following way:
+            (0) start with the mass-weighted hessian and mapping transformation
+                arrays
+            (1) compute eigenmodes and eigenvalues of hessian
+            (2) generate internal basis that removes global translations (and
+                rotations in case of nonperiodic systems) and transform hessian
+                and mapping transformation.
+            (3) compute the SVD of the mapping
+            (4) transform the internal hessian in the generalized row space of
+                the mapping; is then obtained based on the block submatrices
+
+        The ``Quadratic`` constructor requires four arguments:
+            -   an ``Atoms`` instance that represents the CG system. This is
+                obtained using self.get_atoms_reduced().
+            -   the CG hessian as calculated using matrix algebra (vide supra)
+            -   the equilibrium geometry (present in atoms_reduced)
+            -   the equilibrium cell matrix (present in atoms_reduced)
 
         Arguments
         ---------
 
-        pair (tuple):
-            tuple containing two integers that refer to the particles
-            which should be clustered.
+        quadratic (``Quadratic`` instance):
+            quadratic which describes the PES in the original degrees of
+            freedom. Its ``Atoms`` instance should be the same as self.atoms.
 
-        clusters (ndarray of shape (natom, natom)):
-            description of current cluster configuration
+        T (double):
+            temperature at which the clustering should be applied, in kelvin.
 
         """
-        pass
+        assert id(self.atoms) == id(quadratic.atoms)
+        # set equilibrium geometry and cell before computing atoms_reduced
+        self.atoms.set_positions(quadratic.geometry)
+        self.atoms.set_cell(quadratic.cell)
+        atoms_reduced = self.get_atoms_reduced()
+
+        # mass diagonal matrix for atomistic system
+        W_r = get_mass_matrix(self.atoms)
+        # internal basis for atomistic representation
+        B_r = get_internal_basis(self.atoms, mw=True)
+
+        # mass diagonal matrix for reduced system
+        W_R = get_mass_matrix(atoms_reduced)
+        # internal basis for reduced representation
+        B_R = get_internal_basis(atoms_reduced, mw=True)
+
+        # get arrays and apply mass-weighting
+        mapping   = self.get_mapping()
+        mapping_m = np.sqrt(W_R) @ mapping @ np.linalg.inv(np.sqrt(W_r))
+        hessian   = quadratic.hessian.copy()
+        hessian_m = np.linalg.inv(np.sqrt(W_r)) @ hessian @ np.linalg.inv(np.sqrt(W_r))
+
+        # transform to internal coordinates
+        mapping_ic = np.transpose(B_R) @ mapping_m @ B_r
+        hessian_ic = np.transpose(B_r) @ hessian_m @ B_r
+        _, sigmas, KNT = np.linalg.svd(mapping_ic)
+        assert np.allclose(sigmas, np.ones(sigmas.shape)) # sing. values == 1
+        KN = np.transpose(KNT) # generalized row space of mapping
+
+        # transform hessian into generalized row space, create blocks
+        hessian_row = np.transpose(KN) @ hessian_ic @ KN
+        size = mapping_ic.shape[0] # depends on periodicity
+        hessian_11 = hessian_row[:size, :size]
+        hessian_12 = hessian_row[:size, size:]
+        hessian_22 = hessian_row[size:, size:]
+
+        # diagonalize lower right block to obtain frequencies
+        # compute classical and quantum entropy
+        omegas, _ = np.linalg.eigh(hessian_22)
+        frequencies = np.sqrt(omegas) / (2 * np.pi)
+        smap_quantum   = np.sum(compute_entropy_quantum(frequencies, T))
+        smap_classical = np.sum(compute_entropy_classical(frequencies, T))
+        saa_quantum    = quadratic.compute_entropy(T, quantum=True)
+        saa_classical  = quadratic.compute_entropy(T, quantum=False)
+
+        # compute mass-weighted CG hessian
+        # compute classical and quantum entropies, verify results
+        hessian_      = hessian_11
+        hessian_     -= hessian_12 @ np.linalg.inv(hessian_22) @ hessian_12.T
+        omegas, _     = np.linalg.eigh(hessian_)
+        frequencies   = np.sqrt(omegas) / (2 * np.pi)
+        scg_quantum   = np.sum(compute_entropy_quantum(frequencies, T))
+        scg_classical = np.sum(compute_entropy_classical(frequencies, T))
+        assert abs(saa_classical - (scg_classical + smap_classical)) < 1e-9
+
+        # reverse transformations to obtain hessian for quadratic
+        hessian_cg = B_R @ hessian_ @ B_R.T
+        hessian_cg = np.sqrt(W_R) @ hessian_cg @ np.sqrt(W_R)
+        return (saa_quantum, smap_quantum, scg_quantum), Quadratic(
+                atoms_reduced,
+                hessian_cg,
+                atoms_reduced.get_positions(),
+                atoms_reduced.get_cell(),
+                )
+
+    def _score_pairs(self, quadratic, pairs, T=300):
+        """Computes the mapping entropy for each of the cluster pair
+
+        This function considers pairs of clusters and computes the mapping
+        entropy that would be encountered when these clusters would be merged.
+        It contains a few optimizations in comparison to self.apply() which
+        sacrifice modularity and readability for speed.
+
+        Arguments
+        ---------
+
+        quadratic (``Quadratic`` instance):
+            quadratic which describes the PES in the original degrees of
+            freedom. Its ``Atoms`` instance should be the same as self.atoms.
+
+        pairs (list of tuples):
+            list of pairs of cluster indices.
+
+        """
+        # general stuff
+        masses  = self.atoms.get_masses().copy()
+        indices = self.get_indices()
+
+        # create transformation arrays that remain fixed throughout the list
+        W_r = get_mass_matrix(self.atoms)
+        B_r = get_internal_basis(self.atoms, mw=True)
+
+        # allocate arrays that are only slightly modified for each pair
+        ncluster    = self.get_ncluster()
+        _projection = np.zeros((ncluster - 1, len(self.atoms)))
+        _mapping    = np.zeros((3 * (ncluster - 1), 3 * len(self.atoms)), dtype=np.dtype(int))
+        _masses     = np.zeros(ncluster - 1)
+
+        # precompute transformed hessians
+        hessian    = quadratic.hessian.copy()
+        hessian_m  = np.linalg.inv(np.sqrt(W_r)) @ hessian @ np.linalg.inv(np.sqrt(W_r))
+        hessian_ic = np.transpose(B_r) @ hessian_m @ B_r
+
+        for pair in pairs:
+            # modify _clusters and _masses, fill _W_R
+            print(pair)
+            print('0')
+            _indices = list(indices)
+            _indices[pair[0]] = _indices[pair[0]] + _indices[pair[1]]
+            _indices.pop(pair[1])
+            for i, group in enumerate(_indices):
+                _masses[i] = np.sum(masses[np.array(group)])
+                for j in group:
+                    _projection[i, j] = np.sqrt(masses[j]) / np.sqrt(_masses[i])
+            print('1')
+            _mapping = expand_mapping(_projection)
+            print('2')
+
+            # generate B_R and apply
+            Tr = np.zeros((3, (ncluster - 1) * 3))
+            Tr[0, 0::3] = 1
+            Tr[1, 1::3] = 1
+            Tr[2, 2::3] = 1
+            Tr_mw = Tr @ np.sqrt(np.diag(np.repeat(_masses, 3)))
+            _, _, vH = np.linalg.svd(Tr_mw)
+            B_R = np.transpose(vH[3:])
+            print('3')
+            mapping_ic = np.transpose(B_R) @ _mapping @ B_r
+            print('4')
+
+            _, sigmas, KNT = np.linalg.svd(mapping_ic)
+            assert np.allclose(sigmas, np.ones(sigmas.shape)) # sing. values == 1
+            KN = np.transpose(KNT) # generalized row space of mapping
+            print('5')
+
+            # transform hessian into generalized row space, create blocks
+            hessian_row = np.transpose(KN) @ hessian_ic @ KN
+            size = mapping_ic.shape[0] # depends on periodicity
+            hessian_11 = hessian_row[:size, :size]
+            hessian_12 = hessian_row[:size, size:]
+            hessian_22 = hessian_row[size:, size:]
+            print('6')
+
+            omegas, _ = np.linalg.eigh(hessian_22)
+            frequencies = np.sqrt(omegas) / (2 * np.pi)
+            smap_quantum   = np.sum(compute_entropy_quantum(frequencies, T))
+            _projection[:] = 0.0
+            _masses[:]     = 0.0
+            _mapping[:]    = 0.0
+
 
     def get_atoms_reduced(self):
         """Constructs an ``Atoms`` instance for the clustered system"""
@@ -168,4 +339,12 @@ class Clustering(object):
         indices = self.get_indices()
         for i, group in enumerate(indices):
             assert np.all(self.clusters[i, np.array(group)])
+
+        # create expanded mapping and verify
+        mapping = expand_mapping(self.projection)
+        for i, group in enumerate(indices):
+            for j in range(len(self.atoms)):
+                assert self.projection[i, j] == mapping[3 * i    , 3 * j    ]
+                assert self.projection[i, j] == mapping[3 * i + 1, 3 * j + 1]
+                assert self.projection[i, j] == mapping[3 * i + 2, 3 * j + 2]
         return True

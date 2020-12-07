@@ -5,7 +5,6 @@ import ase.units
 #from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
 
 
-
 def get_internal_basis(atoms, mw=False):
     """Creates basis for internal coordinates
 
@@ -73,6 +72,23 @@ def compute_entropy_quantum(f, T):
         raise ValueError('Entropy at 0Hz is infinite')
 
 
+def compute_entropy_classical(f, T):
+    if (f > 0).all():
+        h = ase.units._hplanck # in J s
+        k = ase.units._k # in J / K
+        f_si = f * ase.units.s # frequencies in Hz
+        beta = 1 / (k * T)
+        thetas = beta * h * f_si # dimensionless
+        q_classical = 1 / (thetas)
+        f_classical = - np.log(q_classical) / beta
+        s_classical = k * (1 + np.log(1 / thetas))
+        s_classical /= 1000
+        s_classical *= ase.units._Nav
+        return s_classical
+    else:
+        raise ValueError('Entropy at 0Hz is infinite')
+
+
 def get_cluster_positions(atoms, clustering):
     """Computes the positions of the clusters"""
     ncluster = clustering.get_ncluster()
@@ -124,6 +140,24 @@ def get_cluster_elements(atoms, clustering):
                     cluster_elements[new_key] = numbers_in_group
                     new_key -= 1
     return numbers_c
+
+
+def expand_mapping(projection):
+    """Expands a projection matrix to triple its size
+
+    Clusters and projection arrays are usually stored in an array of size
+    (natom, natom) because no distinction is made between the x, y, and z
+    components. This function enlarges these arrays to size (3natom, 3natom)
+    by row/column permutations on a diagonal block matrix of three copies.
+    """
+    N = projection.shape[0]
+    n = projection.shape[1]
+    block = np.kron(np.eye(3), projection)
+    indices_n = np.arange(3 * n).reshape(3, n).T.flatten()
+    indices_N = np.arange(3 * N).reshape(3, N).T.flatten()
+    permute_rows = block[indices_N, :]
+    total = permute_rows[:, indices_n]
+    return total
 
 
 #def infer_bonds(atoms, mic=True, thresh=2.5):

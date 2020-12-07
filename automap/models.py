@@ -3,8 +3,7 @@ import numpy as np
 from ase.units import kJ, mol
 
 from automap.utils import get_mass_matrix, get_internal_basis, \
-        compute_entropy_quantum
-
+        compute_entropy_quantum, compute_entropy_classical
 
 
 class Quadratic(object):
@@ -124,7 +123,7 @@ class Quadratic(object):
         self.modes[kind][:] = v
         self.values[kind][:] = w
 
-    def compute_entropy(self, T=300):
+    def compute_entropy(self, T=300, quantum=True):
         """Computes the (quantum) entropy based on the hessian eigenvalues.
 
         The entropy is returned in kJ/(mol K).
@@ -137,4 +136,7 @@ class Quadratic(object):
 
         """
         _, omegas2 = self.get_modes_values(kind='reduced')
-        return np.sum(compute_entropy_quantum(np.sqrt(omegas2) / (2 * np.pi), T))
+        if quantum:
+            return np.sum(compute_entropy_quantum(np.sqrt(omegas2) / (2 * np.pi), T))
+        else:
+            return np.sum(compute_entropy_classical(np.sqrt(omegas2) / (2 * np.pi), T))

@@ -1,87 +1,73 @@
 import numpy as np
-from abc import ABC, abstractmethod
+from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
 
 from automap.utils import get_mass_matrix, get_internal_basis, \
         compute_entropy_quantum
+from automap.clustering import Clustering
 
 
-class Reduction(ABC):
-    """Base class to execute a dimensionality reduction algorithm"""
+class GreedyReduction(object):
+    """Represents the greedy reduction algorithm"""
 
-    @abstractmethod
-    def __call__(self, clustering, quadratic):
-        pass
+    def __init__(self, cutoff, max_neighbors, ndof_thres):
+        """Constructor"""
+        self.cutoff        = cutoff
+        self.max_neighbors = max_neighbors
+        self.ndof_thres    = ndof_thres
 
-    @staticmethod
-    def compute_loss(clustering, quadratic, T=300):
-        """Computes the CG and mapping entropy for the clustering
+    def generate_pairs(self, clustering):
+        """Generates pairs of atoms that are close to each other"""
+        nlist = NeighborList(
+                self.cutoff * np.ones(clustering.get_ncluster()) / 2,
+                sorted=False,
+                self_interaction=False,
+                bothways=False,
+                skin=0.0,
+                primitive=NewPrimitiveNeighborList,
+                )
+        # create reduced atoms object
+        atoms_reduced = clustering.get_atoms_reduced()
+        nlist.update(atoms_reduced)
+        pairs = []
+        for i in range(len(atoms_reduced)):
+            neighbors, _ = nlist.get_neighbors(i)
+            distances = np.array([atoms_reduced.get_distance(i, a, mic=True) for a in list(neighbors)])
+            sorting = distances.argsort()
+            for j in range(min(len(neighbors), self.max_neighbors)):
+                pair = [i, sorting[j]]
+                pair.sort()
+                pairs.append(tuple(pair))
+        return pairs
 
-        The steps are as follows:
-            (0) start with the mass-weighted hessian and mapping transformation
-                arrays
-            (1) compute eigenmodes and eigenvalues of hessian
-            (2) generate internal basis that removes global translations (and
-                rotations in case of nonperiodic systems) and transform hessian
-                and mapping transformation.
-            (3) compute the SVD of the mapping
-            (4) transform the internal hessian in the generalized row space of
-                the mapping
-            (5) diagonalize the lower hessian submatrix to obtain the mapping
-                entropy.
+    def __call__(self, quadratic, clustering=None):
+        """Applies the greedy reduction to a ``Quadratic`` instance
 
         Arguments
         ---------
 
-        clustering (``Clustering`` instance):
-            instance representing the specific clustering of atoms for which
-            the entropies must be computed.
-
         quadratic (``Quadratic`` instance):
-            instance representing the local PES.
+            quadratic which should be reduced.
 
-        T (double):
-            temperature in Kelvin. This is required to compute the entropy
-            of the individual harmonic oscillators.
+        clustering (``Clustering`` instance, optional):
+            clustering from which the algorithm should start.
 
         """
-        atoms_reduced = clustering.get_atoms_reduced()
+        if clustering is None:
+            clustering = Clustering(quadratic.atoms)
 
-        # mass diagonal matrix for atomistic system
-        W_r = get_mass_matrix(clustering.atoms)
-        # internal basis for atomistic representation
-        B_r = get_internal_basis(clustering.atoms, mw=True)
+        # compute list of candidate cluster pairs
+        pairs = self.generate_pairs(clustering)
 
-        # mass diagonal matrix for reduced system
-        W_R = get_mass_matrix(atoms_reduced)
-        # internal basis for reduced representation
-        B_R = get_internal_basis(atoms_reduced, mw=True)
+        # list of indices
+        indices_ = clustering.get_indices()
+        symbols = list(clustering.get_atoms_reduced().symbols)
+        for pair in pairs:
+            indices = list(indices_)
+            group = indices.pop(pair[1])
+            indices[pair[0]] = indices[pair[0]] + group
+            clustering.update_indices(tuple(indices))
 
-        # get arrays and apply mass-weighting
-        mapping   = clustering.get_mapping()
-        mapping_m = np.sqrt(W_R) @ mapping @ np.linalg.inv(np.sqrt(W_r))
-        hessian   = quadratic.hessian.copy()
-        hessian_m = np.linalg.inv(np.sqrt(W_r)) @ hessian @ np.linalg.inv(np.sqrt(W_r))
+    def converged(self, clustering):
+        """Determine whether or not the current clustering is sufficient"""
+        return self.ndof_thres > clustering.get_ncluster() * 3
 
-        # transform to internal coordinates
-        mapping_ic = np.transpose(B_R) @ mapping_m @ B_r
-        hessian_ic = np.transpose(B_r) @ hessian_m @ B_r
-        _, sigmas, KNT = np.linalg.svd(mapping_ic)
-        assert np.allclose(sigmas, np.ones(sigmas.shape)) # sing. values == 1
-        KN = np.transpose(KNT) # generalized row space of mapping
-
-        # transform hessian into generalized row space, create blocks
-        hessian_row = np.transpose(KN) @ hessian_ic @ KN
-        size = mapping_ic.shape[0] # depends on periodicity
-        hessian_11 = hessian_row[:size, :size]
-        hessian_12 = hessian_row[:size, size:]
-        hessian_22 = hessian_row[size:, size:]
-
-        # diagonalize lower right block to obtain frequencies; compute entropy
-        omegas, _ = np.linalg.eigh(hessian_22)
-        frequencies = np.sqrt(omegas) / (2 * np.pi)
-        return np.sum(compute_entropy_quantum(frequencies, T))
-
-
-class GreedyReduction(Reduction):
-    """Represents the greedy reduction algorithm"""
-    pass
