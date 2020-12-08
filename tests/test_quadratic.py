@@ -1,6 +1,5 @@
 import numpy as np
 import automap
-import molmod
 from pathlib import Path
 from ase.units import invcm, s, _c
 

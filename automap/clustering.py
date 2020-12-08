@@ -425,5 +425,3 @@ class Clustering(object):
                         )
                 positions[j, :] = pos_ref + delta
         self.atoms.set_positions(positions)
-
-
