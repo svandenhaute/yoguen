@@ -23,8 +23,14 @@ def test_score_pairs(tmp_path):
             (90, 180),
             (23, 130),
             (6, 450),
+            (0, 1),
+            (234, 13),
+            (67, 350),
+            (90, 180),
+            (23, 130),
+            (6, 450),
             ]
-    clustering._score_pairs(quadratic, pairs)
+    smap = clustering._score_pairs(quadratic, pairs)
 
 
 def test_clustering_basic(tmp_path):
@@ -101,5 +107,3 @@ def test_get_atoms_reduced(tmp_path):
     atoms_reduced = clustering.get_atoms_reduced()
     pos_reduced = atoms_reduced.get_positions()
     assert np.all(np.abs(pos_reduced - clusters) < 1e-4)
-
-

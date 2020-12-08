@@ -1,5 +1,7 @@
-import numpy as np
 import ase
+import numpy as np
+
+from tqdm import tqdm
 
 from automap.utils import get_cluster_positions, get_cluster_elements, \
         compute_entropy_quantum, compute_entropy_classical, get_mass_matrix, \
@@ -177,71 +179,66 @@ class Clustering(object):
 
         """
         # general stuff
-        masses  = self.atoms.get_masses().copy()
-        indices = self.get_indices()
+        masses   = self.atoms.get_masses().copy()
+        indices  = self.get_indices()
+        ncluster = self.get_ncluster()
+        smap     = np.zeros(len(pairs))
 
         # create transformation arrays that remain fixed throughout the list
         W_r = get_mass_matrix(self.atoms)
         B_r = get_internal_basis(self.atoms, mw=True)
-
-        # allocate arrays that are only slightly modified for each pair
-        ncluster    = self.get_ncluster()
-        _projection = np.zeros((ncluster - 1, len(self.atoms)))
-        _mapping    = np.zeros((3 * (ncluster - 1), 3 * len(self.atoms)), dtype=np.dtype(int))
-        _masses     = np.zeros(ncluster - 1)
+        assert np.allclose(B_r.T @ B_r, np.identity(B_r.shape[1]))
+        t_mw = np.ones((1, len(self.atoms))) @ np.sqrt(np.diag(masses))
+        _, __, vH = np.linalg.svd(t_mw)
+        B_r_small = np.transpose(vH[1:])
+        B_r_ = expand_mapping(B_r_small)
+        assert np.allclose(B_r, B_r_)
 
         # precompute transformed hessians
         hessian    = quadratic.hessian.copy()
         hessian_m  = np.linalg.inv(np.sqrt(W_r)) @ hessian @ np.linalg.inv(np.sqrt(W_r))
         hessian_ic = np.transpose(B_r) @ hessian_m @ B_r
-
-        for pair in pairs:
-            # modify _clusters and _masses, fill _W_R
-            print(pair)
-            print('0')
-            _indices = list(indices)
-            _indices[pair[0]] = _indices[pair[0]] + _indices[pair[1]]
-            _indices.pop(pair[1])
+        for k, pair in tqdm(enumerate(pairs), total=len(pairs), unit='pairs'):
+            _indices = self._join_pair(indices, pair)
+            _masses     = np.zeros(ncluster - 1)
+            _projection = np.zeros((ncluster - 1, len(self.atoms)))
             for i, group in enumerate(_indices):
                 _masses[i] = np.sum(masses[np.array(group)])
                 for j in group:
                     _projection[i, j] = np.sqrt(masses[j]) / np.sqrt(_masses[i])
-            print('1')
-            _mapping = expand_mapping(_projection)
-            print('2')
 
-            # generate B_R and apply
-            Tr = np.zeros((3, (ncluster - 1) * 3))
-            Tr[0, 0::3] = 1
-            Tr[1, 1::3] = 1
-            Tr[2, 2::3] = 1
-            Tr_mw = Tr @ np.sqrt(np.diag(np.repeat(_masses, 3)))
-            _, _, vH = np.linalg.svd(Tr_mw)
-            B_R = np.transpose(vH[3:])
-            print('3')
-            mapping_ic = np.transpose(B_R) @ _mapping @ B_r
-            print('4')
-
-            _, sigmas, KNT = np.linalg.svd(mapping_ic)
-            assert np.allclose(sigmas, np.ones(sigmas.shape)) # sing. values == 1
-            KN = np.transpose(KNT) # generalized row space of mapping
-            print('5')
+            # transform _projection and use svd to obtain generalized basis
+            T_mw = np.ones((1, ncluster - 1)) @ np.sqrt(np.diag(_masses))
+            _, __, vH = np.linalg.svd(T_mw)
+            B_R_small = np.transpose(vH[1:])
+            _, sigmas, basis_small = np.linalg.svd(
+                    B_R_small.T @ _projection @ B_r_small, # transform
+                    )
+            assert np.allclose(sigmas, np.ones(sigmas.shape)) # check sigmas
+            KN = np.transpose(expand_mapping(basis_small)) # triple size
+            assert np.allclose(KN @ KN.T, np.identity(KN.shape[0])) # ortho
+            assert np.allclose(KN.T @ KN, np.identity(KN.shape[0])) # ortho
 
             # transform hessian into generalized row space, create blocks
             hessian_row = np.transpose(KN) @ hessian_ic @ KN
-            size = mapping_ic.shape[0] # depends on periodicity
-            hessian_11 = hessian_row[:size, :size]
-            hessian_12 = hessian_row[:size, size:]
-            hessian_22 = hessian_row[size:, size:]
-            print('6')
-
-            omegas, _ = np.linalg.eigh(hessian_22)
+            size = 3 * _projection.shape[0] - 3 # depends on periodicity
+            #hessian_11 = hessian_row[:size, :size]
+            #hessian_12 = hessian_row[:size, size:]
+            hessian_22  = hessian_row[size:, size:]
+            omegas, _   = np.linalg.eigh(hessian_22)
             frequencies = np.sqrt(omegas) / (2 * np.pi)
-            smap_quantum   = np.sum(compute_entropy_quantum(frequencies, T))
-            _projection[:] = 0.0
-            _masses[:]     = 0.0
-            _mapping[:]    = 0.0
+            smap[k]     = np.sum(compute_entropy_quantum(frequencies, T))
+        return smap
 
+    @staticmethod
+    def _join_pair(indices, pair):
+        """Returns new indices with joined clusters"""
+        _indices = list(indices)
+        _pair = list(pair)
+        _pair.sort() # ensure smallest index is at _pair[0]
+        _indices[_pair[0]] = _indices[_pair[0]] + _indices[_pair[1]]
+        _indices.pop(_pair[1])
+        return tuple(_indices)
 
     def get_atoms_reduced(self):
         """Constructs an ``Atoms`` instance for the clustered system"""

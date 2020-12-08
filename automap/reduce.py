@@ -9,11 +9,12 @@ from automap.clustering import Clustering
 class GreedyReduction(object):
     """Represents the greedy reduction algorithm"""
 
-    def __init__(self, cutoff, max_neighbors, ndof_thres):
+    def __init__(self, cutoff, max_neighbors, ncluster_thres, temperature=300):
         """Constructor"""
-        self.cutoff        = cutoff
-        self.max_neighbors = max_neighbors
-        self.ndof_thres    = ndof_thres
+        self.cutoff         = cutoff
+        self.max_neighbors  = max_neighbors
+        self.ncluster_thres = ncluster_thres
+        self.temperature    = temperature
 
     def generate_pairs(self, clustering):
         """Generates pairs of atoms that are close to each other"""
@@ -34,7 +35,7 @@ class GreedyReduction(object):
             distances = np.array([atoms_reduced.get_distance(i, a, mic=True) for a in list(neighbors)])
             sorting = distances.argsort()
             for j in range(min(len(neighbors), self.max_neighbors)):
-                pair = [i, sorting[j]]
+                pair = [i, neighbors[sorting[j]]]
                 pair.sort()
                 pairs.append(tuple(pair))
         return pairs
@@ -55,19 +56,48 @@ class GreedyReduction(object):
         if clustering is None:
             clustering = Clustering(quadratic.atoms)
 
-        # compute list of candidate cluster pairs
-        pairs = self.generate_pairs(clustering)
+        niter = 0
+        while not self.converged(clustering):
+            print('')
+            print('')
+            print('-' * 10 + 'ITERATION {}'.format(niter) + '-' * 10)
+            # compute list of candidate cluster pairs and compute smap array
+            print('building pair list...')
+            pairs = self.generate_pairs(clustering)
+            print('selected {} pairs to evaluate'.format(len(pairs)))
+            smap  = clustering._score_pairs(
+                    quadratic,
+                    pairs,
+                    self.temperature,
+                    )
+            index = np.argmin(smap)
+            print('found {} optimal at Smap = {} kJ/molK'.format(
+                pairs[index],
+                smap[index],
+                ))
+            atoms_reduced = clustering.get_atoms_reduced()
+            symbols    = [None, None]
+            symbols[0] = atoms_reduced.symbols[pairs[index][0]]
+            symbols[1] = atoms_reduced.symbols[pairs[index][1]]
+            distance = atoms_reduced.get_distance(
+                    pairs[index][0],
+                    pairs[index][1],
+                    mic=True,
+                    )
+            print('with types {} at distance {} angstrom'.format(
+                symbols,
+                distance,
+                ))
 
-        # list of indices
-        indices_ = clustering.get_indices()
-        symbols = list(clustering.get_atoms_reduced().symbols)
-        for pair in pairs:
-            indices = list(indices_)
-            group = indices.pop(pair[1])
-            indices[pair[0]] = indices[pair[0]] + group
-            clustering.update_indices(tuple(indices))
+            # apply clustering and print extra info
+            indices = clustering._join_pair(
+                    clustering.get_indices(),
+                    pairs[index],
+                    )
+            clustering.update_indices(indices)
+            niter += 1
+
 
     def converged(self, clustering):
         """Determine whether or not the current clustering is sufficient"""
-        return self.ndof_thres > clustering.get_ncluster() * 3
-
+        return self.ncluster_thres >= clustering.get_ncluster()
