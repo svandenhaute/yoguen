@@ -2,9 +2,9 @@ import logging
 import numpy as np
 from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
 
-from automap.utils import get_mass_matrix, get_internal_basis, \
+from yoguen.utils import get_mass_matrix, get_internal_basis, \
         compute_entropy_quantum
-from automap.clustering import Clustering
+from yoguen.clustering import Clustering
 
 
 logger = logging.getLogger(__name__) # logging per module

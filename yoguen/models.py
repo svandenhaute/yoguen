@@ -2,7 +2,7 @@ import numpy as np
 
 from ase.units import kJ, mol
 
-from automap.utils import get_mass_matrix, get_internal_basis, \
+from yoguen.utils import get_mass_matrix, get_internal_basis, \
         compute_entropy_quantum, compute_entropy_classical
 
 

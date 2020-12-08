@@ -1,4 +1,4 @@
-import automap
+import yoguen
 import numpy as np
 
 from systems import get_system
@@ -13,8 +13,8 @@ def test_score_pairs(tmp_path):
     indices  = system['indices']
     clusters = system['clusters']
 
-    clustering = automap.Clustering(atoms)
-    quadratic = automap.Quadratic(atoms, hessian, geometry, cell)
+    clustering = yoguen.Clustering(atoms)
+    quadratic = yoguen.Quadratic(atoms, hessian, geometry, cell)
     pairs = [ # random atom indices in [0, 455]
             (0, 1),
             (234, 13),
@@ -48,13 +48,13 @@ def test_clustering_uio66(tmp_path):
     hessian  = system['hessian']
     indices  = system['indices']
 
-    clustering = automap.Clustering(atoms)
+    clustering = yoguen.Clustering(atoms)
     clustering.update_indices(indices) # set non-trivial mapping
 
     #clustering.complete_clusters_by_translation()
     #clustering.atoms.write('/home/sandervandenhaute/conventional.cif')
     #clustering.visualize('/home/sandervandenhaute/clustering.pdb')
-    quadratic = automap.Quadratic(atoms, hessian, geometry, cell)
+    quadratic = yoguen.Quadratic(atoms, hessian, geometry, cell)
     entropies, quadratic_reduced = clustering.apply(quadratic)
     assert entropies[2] < quadratic.compute_entropy() # verify entropy decrease
 
@@ -66,7 +66,7 @@ def test_clustering_basic(tmp_path):
     cell     = system['cell']
     hessian  = system['hessian']
 
-    clustering = automap.Clustering(atoms)
+    clustering = yoguen.Clustering(atoms)
     assert clustering.get_ncluster() == len(atoms)
     assert clustering.validate()
 
@@ -78,8 +78,8 @@ def test_clustering_compute_loss(tmp_path):
     cell     = system['cell']
     hessian  = system['hessian']
 
-    clustering = automap.Clustering(atoms)
-    quadratic  = automap.Quadratic(atoms, hessian, geometry, cell)
+    clustering = yoguen.Clustering(atoms)
+    quadratic  = yoguen.Quadratic(atoms, hessian, geometry, cell)
     saa = quadratic.compute_entropy(300)
 
     # compute loss for identical mapping --> should be zero
@@ -98,7 +98,7 @@ def test_get_atoms_reduced(tmp_path):
     atoms.set_positions(geometry) # set atoms to minimum energy configuration
     atoms.set_cell(cell)
 
-    clustering = automap.Clustering(atoms)
+    clustering = yoguen.Clustering(atoms)
     clustering.update_indices(indices)
     atoms_reduced = clustering.get_atoms_reduced()
     pos_reduced = atoms_reduced.get_positions()

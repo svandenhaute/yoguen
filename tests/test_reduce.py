@@ -1,4 +1,4 @@
-import automap
+import yoguen
 from pathlib import Path
 
 from systems import get_system
@@ -12,9 +12,9 @@ def test_generate_pairs_uio66(tmp_path):
     hessian  = system['hessian']
     indices  = system['indices']
 
-    #quadratic = automap.Quadratic(atoms, hessian, geometry, cell)
-    clustering = automap.Clustering(atoms)
-    greedy_reduce = automap.GreedyReduction(
+    #quadratic = yoguen.Quadratic(atoms, hessian, geometry, cell)
+    clustering = yoguen.Clustering(atoms)
+    greedy_reduce = yoguen.GreedyReduction(
             cutoff=5, # cutoff radius in angstrom
             max_neighbors=1, # starting from nearest neighbor
             ncluster_thres=455, # threshold for number of clusters
@@ -40,9 +40,9 @@ def test_greedy_reduce_uio66(tmp_path):
     hessian  = system['hessian']
     path_output = Path.cwd()
 
-    quadratic = automap.Quadratic(atoms, hessian, geometry, cell)
+    quadratic = yoguen.Quadratic(atoms, hessian, geometry, cell)
 
-    greedy_reduce = automap.GreedyReduction(
+    greedy_reduce = yoguen.GreedyReduction(
             cutoff=5, # cutoff radius in angstrom
             max_neighbors=1, # starting from nearest neighbor
             ncluster_thres=455, # threshold for number of clusters

@@ -1,5 +1,5 @@
 import numpy as np
-import automap
+import yoguen
 from pathlib import Path
 from ase.units import invcm, s, _c
 
@@ -13,7 +13,7 @@ def test_quadratic(tmp_path):
     cell     = system['cell']
     hessian  = system['hessian']
 
-    quad = automap.Quadratic(atoms, hessian, geometry, cell)
+    quad = yoguen.Quadratic(atoms, hessian, geometry, cell)
 
     # compute plain eigenvalues
     _, values = quad.get_modes_values('plain')

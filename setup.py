@@ -2,7 +2,7 @@ import setuptools
 
 
 setuptools.setup(
-        name='automap',
+        name='yoguen',
         version='0.0.1',
         author='Sander Vandenhaute',
         packages=setuptools.find_packages(),

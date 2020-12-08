@@ -3,9 +3,9 @@ import numpy as np
 
 from tqdm import tqdm
 
-from automap.utils import compute_entropy_quantum, compute_entropy_classical, \
+from yoguen.utils import compute_entropy_quantum, compute_entropy_classical, \
         get_mass_matrix, get_internal_basis, expand_mapping
-from automap.models import Quadratic
+from yoguen.models import Quadratic
 
 
 class Clustering(object):

@@ -1,6 +1,6 @@
 import yaml
 import logging
-import automap
+import yoguen
 import ase.io
 import numpy as np
 
@@ -42,8 +42,8 @@ if __name__ == '__main__': # actual test
     cell     = system['cell']
     hessian  = system['hessian']
 
-    quadratic = automap.Quadratic(atoms, hessian, geometry, cell)
-    greedy_reduce = automap.GreedyReduction(
+    quadratic = yoguen.Quadratic(atoms, hessian, geometry, cell)
+    greedy_reduce = yoguen.GreedyReduction(
             cutoff=5,
             max_neighbors=6, # starting from nearest neighbor
             ncluster_thres=450,
