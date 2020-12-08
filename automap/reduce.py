@@ -43,9 +43,9 @@ class GreedyReduction(object):
                 pair = [i, neighbors[sorting[j]]]
                 pair.sort()
                 pairs.append(tuple(pair))
-        return pairs[:20]
+        return pairs
 
-    def __call__(self, quadratic, clustering=None, path_output=None,
+    def __call__(self, quadratic, path_output=None,
             progress=True):
         """Applies the greedy reduction to a ``Quadratic`` instance
 
@@ -55,18 +55,15 @@ class GreedyReduction(object):
         quadratic (``Quadratic`` instance):
             quadratic which should be reduced.
 
-        clustering (``Clustering`` instance, optional):
-            clustering from which the algorithm should start.
-
         """
-        if clustering is None:
-            clustering = Clustering(quadratic.atoms)
+        #if clustering is None:
+        #    clustering = Clustering(quadratic.atoms)
+        #else:
+        #    assert id(clustering.atoms) == id(quadratic.atoms)
 
+        clustering = Clustering(quadratic.atoms)
         niter = 0  # tracks number of iterations
         smap  = [] # tracks smap for each pair
-
-        logger.critical('test')
-
         while not self.converged(clustering):
             logger.info('')
             logger.info('')
@@ -124,11 +121,11 @@ class GreedyReduction(object):
             increment = score - smap[-1]
         logger.info('selected pair {}'.format(pair))
         logger.info('\ttypes {} and {}'.format(symbols[0], symbols[1]))
-        logger.info('\tdistance {} angstrom'.format(distance))
+        logger.info('\tdistance between clusters is {:.5e} angstrom'.format(distance))
         logger.info('\tjoining atomic indices {} and {}'.format(groups[0], groups[1]))
         logger.info('\twith atomic elements {} and {}'.format(symbols0, symbols1))
-        logger.info('entropy increment of   {:.7e} kJ/molK'.format(increment))
-        logger.info('total mapping entropy  {:.7e} kJ/molK'.format(total))
+        logger.info('entropy increment:       {:.7e} kJ/molK'.format(increment))
+        logger.info('total mapping entropy:   {:.7e} kJ/molK'.format(total))
 
     def converged(self, clustering):
         """Determine whether or not the current clustering is sufficient"""

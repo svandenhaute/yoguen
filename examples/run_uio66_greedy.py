@@ -46,6 +46,6 @@ if __name__ == '__main__': # actual test
     greedy_reduce = automap.GreedyReduction(
             cutoff=5,
             max_neighbors=1, # starting from nearest neighbor
-            ncluster_thres=454,
+            ncluster_thres=455,
             )
-    greedy_reduce(quadratic, progress=True)
+    greedy_reduce(quadratic, progress=False)
