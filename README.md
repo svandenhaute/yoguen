@@ -1,1 +1,1 @@
-[![build Actions Status](https://github.com/svandenhaute/yoguen/workflows/python-package/badge.svg)](https://github.com/svandenhaute/yoguen/actions)
+[![build Actions Status](https://github.com/svandenhaute/yoguen/workflows/build/badge.svg)](https://github.com/svandenhaute/yoguen/actions)
