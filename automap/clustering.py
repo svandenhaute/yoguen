@@ -3,9 +3,8 @@ import numpy as np
 
 from tqdm import tqdm
 
-from automap.utils import get_cluster_positions, get_cluster_elements, \
-        compute_entropy_quantum, compute_entropy_classical, get_mass_matrix, \
-        get_internal_basis, expand_mapping
+from automap.utils import compute_entropy_quantum, compute_entropy_classical, \
+        get_mass_matrix, get_internal_basis, expand_mapping
 from automap.models import Quadratic
 
 
@@ -51,13 +50,9 @@ class Clustering(object):
 
         """
         self.clusters[:]   = 0
-        self.projection[:] = 0.0
         masses = self.atoms.get_masses()
         for i, group in enumerate(indices):
             self.clusters[i, np.array(group)] = 1
-            total_mass = np.sum(masses[np.array(group)])
-            for atom in group:
-                self.projection[i, atom] = np.sqrt(masses[atom] / total_mass)
         self.validate() # validate current clustering
 
     def apply(self, quadratic, T=300):
@@ -159,7 +154,7 @@ class Clustering(object):
                 atoms_reduced.get_cell(),
                 )
 
-    def _score_pairs(self, quadratic, pairs, T=300):
+    def _score_pairs(self, quadratic, pairs, T=300, progress=False):
         """Computes the mapping entropy for each of the cluster pair
 
         This function considers pairs of clusters and computes the mapping
@@ -176,6 +171,13 @@ class Clustering(object):
 
         pairs (list of tuples):
             list of pairs of cluster indices.
+
+        T (double):
+            temperature at which the entropy should be computed, in kelvin.
+
+        progress (bool):
+            specifies whether or not a progress bar will be shown that
+            indicates the progress
 
         """
         # general stuff
@@ -198,7 +200,7 @@ class Clustering(object):
         hessian    = quadratic.hessian.copy()
         hessian_m  = np.linalg.inv(np.sqrt(W_r)) @ hessian @ np.linalg.inv(np.sqrt(W_r))
         hessian_ic = np.transpose(B_r) @ hessian_m @ B_r
-        for k, pair in tqdm(enumerate(pairs), total=len(pairs), unit='pairs'):
+        for k, pair in tqdm(enumerate(pairs), total=len(pairs), unit='pairs', disable=not progress):
             _indices = self._join_pair(indices, pair)
             _masses     = np.zeros(ncluster - 1)
             _projection = np.zeros((ncluster - 1, len(self.atoms)))
@@ -251,10 +253,10 @@ class Clustering(object):
         assert np.all(masses_c > 0) # masses are strictly positive
 
         # positions
-        pos_c = get_cluster_positions(self.atoms, self)
+        pos_c = self.get_cluster_positions()
 
         # elements
-        numbers_c = get_cluster_elements(self.atoms, self)
+        numbers_c = self.get_cluster_elements()
         return ase.Atoms(
                 numbers=numbers_c,
                 positions=pos_c,
@@ -298,50 +300,121 @@ class Clustering(object):
         """
         return np.sum(np.any(self.clusters, axis=1))
 
+    def get_cluster_positions(self):
+        """Computes the positions of the clusters"""
+        ncluster = self.get_ncluster()
+        indices  = self.get_indices()
+        pos_c    = np.zeros((ncluster, 3))
+        pos      = self.atoms.get_positions()
+        masses   = self.atoms.get_masses()
+
+        for i, group in enumerate(indices):
+            # compute total mass of group
+            mass = np.sum(masses[np.array(group)])
+
+            # first atom is used as reference. COM is computed using relative
+            # vectors only, in order to apply the mic consistently 
+            index_ref = group[0]
+            pos_c[i, :] = pos[index_ref, :]
+            for j in range(1, len(group)):
+                index = group[j]
+                delta = self.atoms.get_distance(index_ref, index, mic=True, vector=True)
+                pos_c[i, :] += masses[index] / mass * delta
+        return pos_c
+
+    def get_cluster_elements(self):
+        """Returns elements of clusters
+
+        Clusters that are chemically equivalent should have the same element.
+        Clusters containing only one atom should have the element of that atom.
+        Cluster elements start at 118 and count backward.
+
+        """
+        ncluster  = self.get_ncluster()
+        indices   = self.get_indices()
+        numbers   = self.atoms.get_atomic_numbers()
+        numbers_c = np.zeros(ncluster)
+
+        cluster_elements = {}
+        new_key = 118 # last element in periodic table
+
+        for i, group in enumerate(indices):
+            if len(group) == 1: # if only one atom, then number is same
+                numbers_c[i] = numbers[group[0]]
+            else: # if multiple atoms, then start at 118
+                numbers_in_group = set(numbers[np.array(group)])
+                found = False
+                for key, value in cluster_elements.items(): # iterate over prev
+                    if value == numbers_in_group:
+                        numbers_c[i] = key
+                        found = True
+                if not found:
+                    cluster_elements[new_key] = numbers_in_group
+                    numbers_c[i] = new_key
+                    new_key -= 1
+        return numbers_c
+
     def validate(self):
         """Validates the current clustering
 
         This function checks:
             - if each nonzero row in self.clusters is mutually orthogonal with
               every other row
-            - if each nonzero row in self.projection is normalized.
             - if each column contains exactly one nonzero entry.
-            - if self.clusters and self.projection are equivalent
 
         """
-        # check signs of all entries are positive and smaller than one
+        # entries should be either zero or one
         assert np.all((self.clusters == 1) + (self.clusters == 0))
-        assert np.all(self.projection >= 0)
-        assert np.all(self.projection <= 1)
 
         # check whether each particle belongs to precisely one cluster
         # (automatically satisfies orthogonality constraint)
         assert np.allclose(np.ones(len(self.atoms)), np.sum(self.clusters, axis=0))
-
-        # check whether coefficients are correct, by computing mass-weighted
-        # clustering and verifying that rows are normalized
-        ncluster = self.get_ncluster()
-        assert np.allclose(
-                np.linalg.norm(self.projection, axis=1)[:ncluster],
-                np.ones(ncluster),
-                )
-
-        # check whether clusters and projection are consistent
-        for i in range(len(self.atoms)):
-            for j in range(len(self.atoms)):
-                if self.clusters[i, j] != 0:
-                    assert self.projection[i, j] > 0
 
         # checks indices calculation
         indices = self.get_indices()
         for i, group in enumerate(indices):
             assert np.all(self.clusters[i, np.array(group)])
 
-        # create expanded mapping and verify
-        mapping = expand_mapping(self.projection)
+        # create XYZ representation of clustering and verify
+        clusters_XYZ = expand_mapping(self.clusters)
         for i, group in enumerate(indices):
             for j in range(len(self.atoms)):
-                assert self.projection[i, j] == mapping[3 * i    , 3 * j    ]
-                assert self.projection[i, j] == mapping[3 * i + 1, 3 * j + 1]
-                assert self.projection[i, j] == mapping[3 * i + 2, 3 * j + 2]
+                assert self.clusters[i, j] == clusters_XYZ[3 * i    , 3 * j    ]
+                assert self.clusters[i, j] == clusters_XYZ[3 * i + 1, 3 * j + 1]
+                assert self.clusters[i, j] == clusters_XYZ[3 * i + 2, 3 * j + 2]
         return True
+
+    def visualize(self, path_file):
+        """Visualizes the current clustering configuration
+
+        It writes an .xyz file containing all initial atoms, but with a
+        coloring that indicates the different clusters.
+        """
+        _atoms = self.atoms.copy()
+        numbers_clusters = self.get_cluster_elements()
+        numbers_visual   = np.zeros(len(_atoms))
+        for i in range(len(_atoms)):
+            index_cluster = np.where(self.clusters[:, i])[0]
+            numbers_visual[i] = numbers_clusters[index_cluster]
+        _atoms.set_atomic_numbers(numbers_visual)
+        _atoms.write(path_file)
+        return _atoms
+
+    def complete_clusters_by_translation(self):
+        """This function translates atoms to complete clusters"""
+        indices   = self.get_indices()
+        positions = self.atoms.get_positions()
+        for i, group in enumerate(indices):
+            index_ref = group[0] # reference atom for the deltas
+            pos_ref   = positions[index_ref]
+            for j in group[1:]:
+                delta = self.atoms.get_distance(
+                        index_ref,
+                        j,
+                        mic=True,
+                        vector=True,
+                        )
+                positions[j, :] = pos_ref + delta
+        self.atoms.set_positions(positions)
+
+

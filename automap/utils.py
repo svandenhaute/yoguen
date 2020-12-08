@@ -1,8 +1,22 @@
 import molmod
+import logging
 import numpy as np
 
 import ase.units
 #from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
+
+
+def get_logger(name, level=20):
+    """Returns logger
+
+    The default logging level is logging.INFO (20).
+
+    """
+    logging.basicConfig(
+            format='%(name) - %(message)',
+            level=20,
+            )
+    return logging.getLogger(name)
 
 
 def get_internal_basis(atoms, mw=False):
@@ -87,59 +101,6 @@ def compute_entropy_classical(f, T):
         return s_classical
     else:
         raise ValueError('Entropy at 0Hz is infinite')
-
-
-def get_cluster_positions(atoms, clustering):
-    """Computes the positions of the clusters"""
-    ncluster = clustering.get_ncluster()
-    indices  = clustering.get_indices()
-    pos_c    = np.zeros((ncluster, 3))
-    pos      = atoms.get_positions()
-    masses   = atoms.get_masses()
-
-    for i, group in enumerate(indices):
-        # compute total mass of group
-        mass = np.sum(masses[np.array(group)])
-
-        # first atom is used as reference. COM is computed using relative
-        # vectors only, in order to apply the mic consistently 
-        index_ref = group[0]
-        pos_c[i, :] = pos[index_ref, :]
-        for j in range(1, len(group)):
-            index = group[j]
-            delta = atoms.get_distance(index_ref, index, mic=True, vector=True)
-            pos_c[i, :] += masses[index] / mass * delta
-    return pos_c
-
-
-def get_cluster_elements(atoms, clustering):
-    """Returns elements of clusters
-
-    Clusters that are chemically equivalent should have the same element.
-    Clusters containing only one atom should have the element of that atom.
-    Cluster elements start at 118 and count backward.
-
-    """
-    ncluster  = clustering.get_ncluster()
-    indices   = clustering.get_indices()
-    numbers   = atoms.get_atomic_numbers()
-    numbers_c = np.zeros(ncluster)
-
-    cluster_elements = {}
-    new_key = 118
-
-    for i, group in enumerate(indices):
-        if len(group) == 1: # if only one atom, then number is same
-            numbers_c[i] = numbers[group[0]]
-        else: # if multiple atoms, then start at 118
-            numbers_in_group = set(numbers[np.array(group)])
-            for key, value in cluster_elements.items():
-                if value == numbers_in_group:
-                    numbers_c[i] = key
-                else:
-                    cluster_elements[new_key] = numbers_in_group
-                    new_key -= 1
-    return numbers_c
 
 
 def expand_mapping(projection):

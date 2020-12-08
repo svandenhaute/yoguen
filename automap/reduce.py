@@ -2,8 +2,11 @@ import numpy as np
 from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
 
 from automap.utils import get_mass_matrix, get_internal_basis, \
-        compute_entropy_quantum
+        compute_entropy_quantum, get_logger
 from automap.clustering import Clustering
+
+
+logger = get_logger(__name__)
 
 
 class GreedyReduction(object):
@@ -56,7 +59,11 @@ class GreedyReduction(object):
         if clustering is None:
             clustering = Clustering(quadratic.atoms)
 
-        niter = 0
+        niter = 0  # tracks number of iterations
+        smap  = [] # tracks smap for each pair
+
+        logger.info('test')
+
         while not self.converged(clustering):
             print('')
             print('')

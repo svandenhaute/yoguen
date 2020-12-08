@@ -13,8 +13,8 @@ def test_greedy_reduce_uio66(tmp_path):
     quadratic = automap.Quadratic(atoms, hessian, geometry, cell)
 
     greedy_reduce = automap.GreedyReduction(
-            cutoff=7,
-            max_neighbors=2, # starting from nearest neighbor
-            ncluster_thres=28,
+            cutoff=5,
+            max_neighbors=1, # starting from nearest neighbor
+            ncluster_thres=455,
             )
     greedy_reduce(quadratic)

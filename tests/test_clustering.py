@@ -4,6 +4,24 @@ import numpy as np
 from systems import get_system
 
 
+def test_clustering_uio66(tmp_path):
+    system   = get_system('uio66') # get system input
+    atoms    = system['atoms']
+    geometry = system['geometry']
+    cell     = system['cell']
+    hessian  = system['hessian']
+    indices  = system['indices']
+
+    clustering = automap.Clustering(atoms)
+    clustering.update_indices(indices) # set non-trivial mapping
+
+    clustering.complete_clusters_by_translation()
+    clustering.visualize('/home/sandervandenhaute/clustering.pdb')
+    quadratic = automap.Quadratic(atoms, hessian, geometry, cell)
+    entropies, quadratic_reduced = clustering.apply(quadratic)
+    assert entropies[2] < quadratic.compute_entropy() # verify entropy decrease
+
+
 def test_score_pairs(tmp_path):
     system   = get_system('uio66') # get system input
     atoms    = system['atoms']
@@ -15,22 +33,24 @@ def test_score_pairs(tmp_path):
 
     clustering = automap.Clustering(atoms)
     quadratic = automap.Quadratic(atoms, hessian, geometry, cell)
-
     pairs = [ # random atom indices in [0, 455]
             (0, 1),
             (234, 13),
             (67, 350),
-            (90, 180),
-            (23, 130),
-            (6, 450),
-            (0, 1),
-            (234, 13),
-            (67, 350),
-            (90, 180),
-            (23, 130),
             (6, 450),
             ]
     smap = clustering._score_pairs(quadratic, pairs)
+
+    # do manual calculation using apply()
+    smap_manual = np.zeros(len(pairs))
+    indices = clustering.get_indices()
+    for i, pair in enumerate(pairs):
+        _indices = clustering._join_pair(indices, pair)
+        clustering.update_indices(_indices)
+        entropies, _ = clustering.apply(quadratic)
+        smap_manual[i] = entropies[1]
+        clustering.update_indices(indices) # revert back to default clustering
+    assert np.allclose(smap, smap_manual)
 
 
 def test_clustering_basic(tmp_path):
@@ -59,36 +79,6 @@ def test_clustering_compute_loss(tmp_path):
     # compute loss for identical mapping --> should be zero
     entropies, quadratic_reduced = clustering.apply(quadratic)
     assert abs(saa - entropies[0]) < 1e-8
-
-
-def test_clustering_uio66(tmp_path):
-    system   = get_system('uio66') # get system input
-    atoms    = system['atoms']
-    geometry = system['geometry']
-    cell     = system['cell']
-    hessian  = system['hessian']
-    indices  = system['indices']
-
-    clustering = automap.Clustering(atoms)
-    clustering.update_indices(indices) # set non-trivial mapping
-    quadratic = automap.Quadratic(atoms, hessian, geometry, cell)
-    entropies, quadratic_reduced = clustering.apply(quadratic)
-    assert entropies[2] < quadratic.compute_entropy() # verify entropy decrease
-
-    # create atoms_reduced and trivial clustering, merge pair
-    #pair = (1, 5)
-    #clustering_reduced = automap.Clustering(quadratic_reduced.atoms)
-    #indices = list(clustering_reduced.get_indices())
-    #indices[pair[0]] = indices[pair[0]] + indices.pop(pair[1]) # join 2 and 24
-    #clustering_reduced.update_indices(tuple(indices))
-    #entropies_, _ = clustering_reduced.apply(quadratic_reduced)
-    #print(entropies_)
-
-    #indices = list(clustering.get_indices())
-    #indices[pair[0]] = indices[pair[0]] + indices.pop(pair[1]) # join 2 and 24
-    #clustering.update_indices(tuple(indices))
-    #entropies__, _ = clustering.apply(quadratic)
-    #print(entropies__)
 
 
 def test_get_atoms_reduced(tmp_path):
