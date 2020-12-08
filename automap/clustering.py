@@ -354,6 +354,14 @@ class Clustering(object):
                     new_key -= 1
         return numbers_c
 
+    def get_elements_in_cluster(self, index):
+        """Returns the atomic elements within a given cluster"""
+        indices = self.get_indices()
+        group = indices[index]
+        symbols = list(self.atoms.symbols)
+        cluster_symbols = set([symbols[i] for i in group])
+        return cluster_symbols
+
     def validate(self):
         """Validates the current clustering
 
@@ -389,6 +397,7 @@ class Clustering(object):
 
         It writes an .xyz file containing all initial atoms, but with a
         coloring that indicates the different clusters.
+
         """
         _atoms = self.atoms.copy()
         numbers_clusters = self.get_cluster_elements()

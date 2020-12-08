@@ -6,19 +6,6 @@ import ase.units
 #from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
 
 
-def get_logger(name, level=20):
-    """Returns logger
-
-    The default logging level is logging.INFO (20).
-
-    """
-    logging.basicConfig(
-            format='%(name) - %(message)',
-            level=20,
-            )
-    return logging.getLogger(name)
-
-
 def get_internal_basis(atoms, mw=False):
     """Creates basis for internal coordinates
 

@@ -15,8 +15,9 @@ def test_clustering_uio66(tmp_path):
     clustering = automap.Clustering(atoms)
     clustering.update_indices(indices) # set non-trivial mapping
 
-    clustering.complete_clusters_by_translation()
-    clustering.visualize('/home/sandervandenhaute/clustering.pdb')
+    #clustering.complete_clusters_by_translation()
+    #clustering.atoms.write('/home/sandervandenhaute/conventional.cif')
+    #clustering.visualize('/home/sandervandenhaute/clustering.pdb')
     quadratic = automap.Quadratic(atoms, hessian, geometry, cell)
     entropies, quadratic_reduced = clustering.apply(quadratic)
     assert entropies[2] < quadratic.compute_entropy() # verify entropy decrease

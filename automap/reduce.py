@@ -1,18 +1,20 @@
+import logging
 import numpy as np
 from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
 
 from automap.utils import get_mass_matrix, get_internal_basis, \
-        compute_entropy_quantum, get_logger
+        compute_entropy_quantum
 from automap.clustering import Clustering
 
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__) # logging per module
 
 
 class GreedyReduction(object):
     """Represents the greedy reduction algorithm"""
 
-    def __init__(self, cutoff, max_neighbors, ncluster_thres, temperature=300):
+    def __init__(self, cutoff, max_neighbors, ncluster_thres, temperature=300,
+            path_output=None):
         """Constructor"""
         self.cutoff         = cutoff
         self.max_neighbors  = max_neighbors
@@ -41,9 +43,10 @@ class GreedyReduction(object):
                 pair = [i, neighbors[sorting[j]]]
                 pair.sort()
                 pairs.append(tuple(pair))
-        return pairs
+        return pairs[:20]
 
-    def __call__(self, quadratic, clustering=None):
+    def __call__(self, quadratic, clustering=None, path_output=None,
+            progress=True):
         """Applies the greedy reduction to a ``Quadratic`` instance
 
         Arguments
@@ -62,48 +65,70 @@ class GreedyReduction(object):
         niter = 0  # tracks number of iterations
         smap  = [] # tracks smap for each pair
 
-        logger.info('test')
+        logger.critical('test')
 
         while not self.converged(clustering):
-            print('')
-            print('')
-            print('-' * 10 + 'ITERATION {}'.format(niter) + '-' * 10)
+            logger.info('')
+            logger.info('')
+            logger.info('-' * 10 + 'ITERATION {}'.format(niter) + '-' * 10)
             # compute list of candidate cluster pairs and compute smap array
-            print('building pair list...')
+            logger.info('building pair list...')
             pairs = self.generate_pairs(clustering)
-            print('selected {} pairs to evaluate'.format(len(pairs)))
-            smap  = clustering._score_pairs(
+            logger.info('selected {} pairs to evaluate'.format(len(pairs)))
+            scores  = clustering._score_pairs(
                     quadratic,
                     pairs,
                     self.temperature,
+                    progress=progress,
                     )
-            index = np.argmin(smap)
-            print('found {} optimal at Smap = {} kJ/molK'.format(
-                pairs[index],
-                smap[index],
-                ))
-            atoms_reduced = clustering.get_atoms_reduced()
-            symbols    = [None, None]
-            symbols[0] = atoms_reduced.symbols[pairs[index][0]]
-            symbols[1] = atoms_reduced.symbols[pairs[index][1]]
-            distance = atoms_reduced.get_distance(
-                    pairs[index][0],
-                    pairs[index][1],
-                    mic=True,
+            index = np.argmin(scores) # get pair with minimal Smap
+            self.report(
+                    clustering,
+                    pairs[index],
+                    scores[index],
+                    smap,
                     )
-            print('with types {} at distance {} angstrom'.format(
-                symbols,
-                distance,
-                ))
-
-            # apply clustering and print extra info
-            indices = clustering._join_pair(
+            indices = clustering._join_pair( # join clusters
                     clustering.get_indices(),
                     pairs[index],
                     )
-            clustering.update_indices(indices)
+            clustering.update_indices(indices) # apply clustering
+            smap.append(scores[index])
+
+            if path_output is not None:
+                clustering.visualize(
+                        path_output / ('clustering_' + str(niter) + '.pdb'),
+                        )
             niter += 1
 
+    def report(self, clustering, pair, score, smap):
+        """Reports result of pair scoring"""
+        atoms_reduced = clustering.get_atoms_reduced()
+        symbols    = [None, None]
+        symbols[0] = atoms_reduced.symbols[pair[0]]
+        symbols[1] = atoms_reduced.symbols[pair[1]]
+        distance = atoms_reduced.get_distance(
+                pair[0],
+                pair[1],
+                mic=True,
+                )
+        indices = clustering.get_indices()
+        groups = [indices[pair[0]], indices[pair[1]]]
+        symbols0 = clustering.get_elements_in_cluster(pair[0])
+        symbols1 = clustering.get_elements_in_cluster(pair[1])
+        # define entropies
+        total = score
+        if len(smap) == 0:
+            increment = score
+        else:
+            increment = score - smap[-1]
+        logger.info('selected pair {}'.format(pair))
+        logger.info('\ttypes {} and {}'.format(symbols[0], symbols[1]))
+        logger.info('\tdistance {} angstrom'.format(distance))
+        logger.info('\tjoining atomic indices {} and {}'.format(groups[0], groups[1]))
+        logger.info('\twith atomic elements {} and {}'.format(symbols0, symbols1))
+        logger.info('entropy increment of   {:.7e} kJ/molK'.format(increment))
+        logger.info('total mapping entropy  {:.7e} kJ/molK'.format(total))
 
     def converged(self, clustering):
         """Determine whether or not the current clustering is sufficient"""
