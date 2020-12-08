@@ -232,6 +232,39 @@ class Clustering(object):
             smap[k]     = np.sum(compute_entropy_quantum(frequencies, T))
         return smap
 
+    def _score_pairs_fast(self, quadratic, pairs, T=300, progress=False):
+        """Faster alternative to _score_pairs"""
+        # general stuff
+        masses   = self.atoms.get_masses().copy()
+        indices  = self.get_indices()
+        ncluster = self.get_ncluster()
+        smap     = np.zeros(len(pairs))
+
+        # create transformation arrays that remain fixed throughout the list
+        # precompute transformed hessian
+        W_r = get_mass_matrix(self.atoms)
+        hessian    = quadratic.hessian.copy()
+        hessian_m  = np.linalg.inv(np.sqrt(W_r)) @ hessian @ np.linalg.inv(np.sqrt(W_r))
+        for k, pair in tqdm(enumerate(pairs), total=len(pairs), unit='pairs', disable=not progress):
+            _indices = self._join_pair(indices, pair)
+            _masses     = np.zeros(ncluster - 1)
+            _projection = np.zeros((ncluster - 1, len(self.atoms)))
+            for i, group in enumerate(_indices):
+                _masses[i] = np.sum(masses[np.array(group)])
+                for j in group:
+                    _projection[i, j] = np.sqrt(masses[j]) / np.sqrt(_masses[i])
+
+            # use svd
+            _, sigmas, basis_small = np.linalg.svd(_projection)
+            N_small = np.transpose(basis_small)[:, ncluster - 1:]
+            N = expand_mapping(N_small)
+            hessian_null = np.transpose(N) @ hessian_m @ N
+            omegas, _   = np.linalg.eigh(hessian_null)
+            frequencies = np.sqrt(omegas) / (2 * np.pi)
+            smap[k]     = np.sum(compute_entropy_quantum(frequencies, T))
+            assert np.allclose(sigmas, np.ones(sigmas.shape)) # check sigmas
+        return smap
+
     @staticmethod
     def _join_pair(indices, pair):
         """Returns new indices with joined clusters"""

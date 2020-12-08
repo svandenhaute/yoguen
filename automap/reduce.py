@@ -27,7 +27,7 @@ class GreedyReduction(object):
                 self.cutoff * np.ones(clustering.get_ncluster()) / 2,
                 sorted=False,
                 self_interaction=False,
-                bothways=False,
+                bothways=True,
                 skin=0.0,
                 primitive=NewPrimitiveNeighborList,
                 )
@@ -36,13 +36,20 @@ class GreedyReduction(object):
         nlist.update(atoms_reduced)
         pairs = []
         for i in range(len(atoms_reduced)):
-            neighbors, _ = nlist.get_neighbors(i)
+            neighbors, _ = nlist.get_neighbors(i) # contains duplicates
             distances = np.array([atoms_reduced.get_distance(i, a, mic=True) for a in list(neighbors)])
             sorting = distances.argsort()
-            for j in range(min(len(neighbors), self.max_neighbors)):
+            # start from nearest neighbors and add up to self.max_neighbors,
+            # but avoid duplicates
+            npairs_to_add = min(len(neighbors), self.max_neighbors)
+            npairs_added  = 0
+            for j in range(len(sorting)):
                 pair = [i, neighbors[sorting[j]]]
                 pair.sort()
-                pairs.append(tuple(pair))
+                if npairs_added < npairs_to_add:
+                    if tuple(pair) not in pairs:
+                        pairs.append(tuple(pair))
+                        npairs_added += 1
         return pairs
 
     def __call__(self, quadratic, path_output=None,
@@ -64,15 +71,14 @@ class GreedyReduction(object):
         clustering = Clustering(quadratic.atoms)
         niter = 0  # tracks number of iterations
         smap  = [] # tracks smap for each pair
+        logger.info('')
         while not self.converged(clustering):
-            logger.info('')
-            logger.info('')
             logger.info('-' * 10 + 'ITERATION {}'.format(niter) + '-' * 10)
             # compute list of candidate cluster pairs and compute smap array
             logger.info('building pair list...')
             pairs = self.generate_pairs(clustering)
-            logger.info('selected {} pairs to evaluate'.format(len(pairs)))
-            scores  = clustering._score_pairs(
+            logger.info('obtained {} pairs to evaluate'.format(len(pairs)))
+            scores  = clustering._score_pairs_fast(
                     quadratic,
                     pairs,
                     self.temperature,
@@ -82,8 +88,8 @@ class GreedyReduction(object):
             self.report(
                     clustering,
                     pairs[index],
-                    scores[index],
-                    smap,
+                    score=scores[index],
+                    smap=smap,
                     )
             indices = clustering._join_pair( # join clusters
                     clustering.get_indices(),
@@ -97,8 +103,10 @@ class GreedyReduction(object):
                         path_output / ('clustering_' + str(niter) + '.pdb'),
                         )
             niter += 1
+            logger.info('')
+            logger.info('')
 
-    def report(self, clustering, pair, score, smap):
+    def report(self, clustering, pair, score=None, smap=None):
         """Reports result of pair scoring"""
         atoms_reduced = clustering.get_atoms_reduced()
         symbols    = [None, None]
@@ -113,19 +121,19 @@ class GreedyReduction(object):
         groups = [indices[pair[0]], indices[pair[1]]]
         symbols0 = clustering.get_elements_in_cluster(pair[0])
         symbols1 = clustering.get_elements_in_cluster(pair[1])
-        # define entropies
-        total = score
-        if len(smap) == 0:
-            increment = score
-        else:
-            increment = score - smap[-1]
         logger.info('selected pair {}'.format(pair))
         logger.info('\ttypes {} and {}'.format(symbols[0], symbols[1]))
         logger.info('\tdistance between clusters is {:.5e} angstrom'.format(distance))
         logger.info('\tjoining atomic indices {} and {}'.format(groups[0], groups[1]))
         logger.info('\twith atomic elements {} and {}'.format(symbols0, symbols1))
-        logger.info('entropy increment:       {:.7e} kJ/molK'.format(increment))
-        logger.info('total mapping entropy:   {:.7e} kJ/molK'.format(total))
+        if score is not None and smap is not None:
+            total = score
+            if len(smap) == 0:
+                increment = score
+            else:
+                increment = score - smap[-1]
+            logger.info('entropy increment:       {:.7e} kJ/molK'.format(increment))
+            logger.info('total mapping entropy:   {:.7e} kJ/molK'.format(total))
 
     def converged(self, clustering):
         """Determine whether or not the current clustering is sufficient"""

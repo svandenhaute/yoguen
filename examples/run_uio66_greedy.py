@@ -45,7 +45,7 @@ if __name__ == '__main__': # actual test
     quadratic = automap.Quadratic(atoms, hessian, geometry, cell)
     greedy_reduce = automap.GreedyReduction(
             cutoff=5,
-            max_neighbors=1, # starting from nearest neighbor
-            ncluster_thres=455,
+            max_neighbors=6, # starting from nearest neighbor
+            ncluster_thres=450,
             )
-    greedy_reduce(quadratic, progress=False)
+    greedy_reduce(quadratic, progress=True, path_output=Path.cwd())
