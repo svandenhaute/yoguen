@@ -43,9 +43,14 @@ if __name__ == '__main__': # actual test
     hessian  = system['hessian']
 
     quadratic = yoguen.Quadratic(atoms, hessian, geometry, cell)
-    greedy_reduce = yoguen.GreedyReduction(
-            cutoff=5,
-            max_neighbors=6, # starting from nearest neighbor
-            ncluster_thres=450,
+    generator = yoguen.PairGenerator(
+            cutoff=5, # cutoff radius in angstrom
+            max_neighbors=1, # starting from nearest neighbor
             )
-    greedy_reduce(quadratic, progress=True, path_output=Path.cwd())
+    greducer = yoguen.GreedyReducer(
+            generator,
+            temperature=300, # temperature in kelvin
+            verbose=True, # suppress output
+            tol_score=1e-2, # group equivalent candidates
+            )
+    greducer(quadratic, 28, path_output=Path.cwd())

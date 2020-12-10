@@ -1,6 +1,5 @@
 import logging
 import numpy as np
-from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
 
 from yoguen.utils import get_mass_matrix, get_internal_basis, \
         compute_entropy_quantum
@@ -10,50 +9,18 @@ from yoguen.clustering import Clustering
 logger = logging.getLogger(__name__) # logging per module
 
 
-class GreedyReduction(object):
+class GreedyReducer(object):
     """Represents the greedy reduction algorithm"""
 
-    def __init__(self, cutoff, max_neighbors, ncluster_thres, temperature=300,
-            path_output=None):
+    def __init__(self, generator, temperature=300, verbose=True,
+            tol_score=None):
         """Constructor"""
-        self.cutoff         = cutoff
-        self.max_neighbors  = max_neighbors
-        self.ncluster_thres = ncluster_thres
-        self.temperature    = temperature
+        self.generator   = generator
+        self.temperature = temperature
+        self.verbose     = verbose
+        self.tol_score   = tol_score
 
-    def generate_pairs(self, clustering):
-        """Generates pairs of atoms that are close to each other"""
-        nlist = NeighborList(
-                self.cutoff * np.ones(clustering.get_ncluster()) / 2,
-                sorted=False,
-                self_interaction=False,
-                bothways=True,
-                skin=0.0,
-                primitive=NewPrimitiveNeighborList,
-                )
-        # create reduced atoms object
-        atoms_reduced = clustering.get_atoms_reduced()
-        nlist.update(atoms_reduced)
-        pairs = []
-        for i in range(len(atoms_reduced)):
-            neighbors, _ = nlist.get_neighbors(i) # contains duplicates
-            distances = np.array([atoms_reduced.get_distance(i, a, mic=True) for a in list(neighbors)])
-            sorting = distances.argsort()
-            # start from nearest neighbors and add up to self.max_neighbors,
-            # but avoid duplicates
-            npairs_to_add = min(len(neighbors), self.max_neighbors)
-            npairs_added  = 0
-            for j in range(len(sorting)):
-                pair = [i, neighbors[sorting[j]]]
-                pair.sort()
-                if npairs_added < npairs_to_add:
-                    if tuple(pair) not in pairs:
-                        pairs.append(tuple(pair))
-                        npairs_added += 1
-        return pairs
-
-    def __call__(self, quadratic, path_output=None,
-            progress=True):
+    def __call__(self, quadratic, max_ncluster, path_output=None):
         """Applies the greedy reduction to a ``Quadratic`` instance
 
         Arguments
@@ -62,41 +29,56 @@ class GreedyReduction(object):
         quadratic (``Quadratic`` instance):
             quadratic which should be reduced.
 
-        """
-        #if clustering is None:
-        #    clustering = Clustering(quadratic.atoms)
-        #else:
-        #    assert id(clustering.atoms) == id(quadratic.atoms)
+        max_ncluster (int):
+            specifies the number of clusters below which the reduction is
+            finished.
 
+        path_output (``pathlib.Path`` instance):
+            directory to store output .pdb files to visualize progress
+
+        """
         clustering = Clustering(quadratic.atoms)
         niter = 0  # tracks number of iterations
         smap  = [] # tracks smap for each pair
         logger.info('')
-        while not self.converged(clustering):
-            logger.info('-' * 10 + 'ITERATION {}'.format(niter) + '-' * 10)
-            # compute list of candidate cluster pairs and compute smap array
+        while not max_ncluster > clustering.get_ncluster():
+            logger.info('=' * 20 + '  ITERATION {}  '.format(niter) + '=' * 20)
+            logger.info('current clustering:  {} atoms  --->  {} clusters'
+                    ''.format(len(clustering.atoms), clustering.get_ncluster()))
+
             logger.info('building pair list...')
-            pairs = self.generate_pairs(clustering)
-            logger.info('obtained {} pairs to evaluate'.format(len(pairs)))
-            scores  = clustering._score_pairs_fast(
+            clist = self.generator.compute_candidates(clustering)
+
+            logger.info('obtained {} candidates to evaluate'.format(len(clist)))
+            scores = clustering.score_candidates(
+                    clist,
                     quadratic,
-                    pairs,
                     self.temperature,
-                    progress=progress,
+                    progress=self.verbose, # display progress if verbose
                     )
-            index = np.argmin(scores) # get pair with minimal Smap
-            self.report(
-                    clustering,
-                    pairs[index],
-                    score=scores[index],
-                    smap=smap,
+            selection, _within_tol = self.generator.select(
+                    clist,
+                    scores,
+                    self.tol_score,
                     )
-            indices = clustering._join_pair( # join clusters
-                    clustering.get_indices(),
-                    pairs[index],
+            if self.tol_score is None:
+                logger.warning('WARNING: inequivalent candidates not allowed')
+            logger.info('selected {} candidate(s):'.format(len(selection)))
+            for candidate in selection:
+                candidate.log()
+            if len(_within_tol) > 0:
+                logger.info('first EXCLUDED candidate:')
+                _within_tol[0].log()
+
+            # filter selection and update clustering
+            selection_filtered = self.generator.filter_overlapping_pairs(
+                    selection,
                     )
-            clustering.update_indices(indices) # apply clustering
-            smap.append(scores[index])
+            indices = self.generator.candidate_cls.apply_clist(
+                    selection_filtered,
+                    clustering.indices,
+                    )
+            clustering.update_indices(indices)
 
             if path_output is not None:
                 clustering.visualize(
@@ -134,7 +116,3 @@ class GreedyReduction(object):
                 increment = score - smap[-1]
             logger.info('entropy increment:       {:.7e} kJ/molK'.format(increment))
             logger.info('total mapping entropy:   {:.7e} kJ/molK'.format(total))
-
-    def converged(self, clustering):
-        """Determine whether or not the current clustering is sufficient"""
-        return self.ncluster_thres >= clustering.get_ncluster()

@@ -5,6 +5,14 @@ import ase.units
 #from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
 
 
+def get_natom_from_indices(indices):
+    max_index = 0
+    for group in indices:
+        if max_index > max(group):
+            max_index = max(group)
+    return max_index + 1
+
+
 def get_internal_basis(atoms, mw=False):
     """Creates basis for internal coordinates
 
