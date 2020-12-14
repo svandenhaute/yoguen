@@ -4,6 +4,7 @@ import numpy as np
 from yoguen.utils import get_mass_matrix, get_internal_basis, \
         compute_entropy_quantum
 from yoguen.clustering import Clustering
+from yoguen.pairlist import PairList
 
 
 logger = logging.getLogger(__name__) # logging per module
@@ -12,13 +13,15 @@ logger = logging.getLogger(__name__) # logging per module
 class GreedyReducer(object):
     """Represents the greedy reduction algorithm"""
 
-    def __init__(self, generator, temperature=300, verbose=True,
-            tol_score=None):
+    def __init__(self, cutoff, max_neighbors, temperature=300, verbose=True,
+            tol_score=None, tol_distance=5e-3):
         """Constructor"""
-        self.generator   = generator
-        self.temperature = temperature
-        self.verbose     = verbose
-        self.tol_score   = tol_score
+        self.cutoff        = cutoff
+        self.max_neighbors = max_neighbors
+        self.temperature   = temperature
+        self.verbose       = verbose
+        self.tol_score     = tol_score
+        self.tol_distance  = tol_distance
 
     def __call__(self, quadratic, max_ncluster, path_output=None):
         """Applies the greedy reduction to a ``Quadratic`` instance
@@ -47,35 +50,44 @@ class GreedyReducer(object):
                     ''.format(len(clustering.atoms), clustering.get_ncluster()))
 
             logger.info('building pair list...')
-            clist = self.generator.compute_candidates(clustering)
+            pairlist = PairList.generate(
+                    clustering,
+                    cutoff=self.cutoff,
+                    max_neighbors=self.max_neighbors,
+                    )
+            assert pairlist.npairs > 0
+            logger.info('obtained {} candidates to evaluate'.format(
+                pairlist.npairs))
 
-            logger.info('obtained {} candidates to evaluate'.format(len(clist)))
-            scores = clustering.score_candidates(
-                    clist,
+            scores = clustering.score_pairlist(
+                    pairlist,
                     quadratic,
                     self.temperature,
                     progress=self.verbose, # display progress if verbose
                     )
-            selection, _within_tol = self.generator.select(
-                    clist,
-                    scores,
-                    self.tol_score,
-                    )
+            # add scores to pairlist and sort accordingly
+            pairlist.add_scores(scores)
+            pairlist.sort()
             if self.tol_score is None:
                 logger.warning('WARNING: inequivalent candidates not allowed')
-            logger.info('selected {} candidate(s):'.format(len(selection)))
-            for candidate in selection:
-                candidate.log()
-            if len(_within_tol) > 0:
-                logger.info('first EXCLUDED candidate:')
-                _within_tol[0].log()
+                pairlist.filter_scores(np.min(scores), max_pairs=1) # retain 1
+                assert pairlist.npairs == 1
+            else:
+                # remove pairs with score above threshold
+                threshold = np.min(scores) * (1 + self.tol_score)
+                pairlist.filter_scores(threshold)
+            logger.info('retained {} pairs with score below {}'.format(
+                pairlist.npairs,
+                threshold,
+                ))
 
-            # filter selection and update clustering
-            selection_filtered = self.generator.filter_overlapping_pairs(
-                    selection,
-                    )
-            indices = self.generator.candidate_cls.apply_clist(
-                    selection_filtered,
+            # only retain pairs equivalent with first one
+            pairlist.filter_equivalent(pairlist[0], self.tol_distance)
+            logger.info('retained {} equivalent pairs'.format(pairlist.npairs))
+            pairlist.filter_disjunct() # remove pairs with overlapping indices
+            logger.info('retained {} disjunct pairs'.format(pairlist.npairs))
+            pairlist.log()
+            indices = pairlist.apply( # apply pairlist to clustering
                     clustering.indices,
                     )
             clustering.update_indices(indices)

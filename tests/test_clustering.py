@@ -14,25 +14,29 @@ def test_score_pairs(tmp_path):
 
     clustering = yoguen.Clustering(atoms)
     quadratic = yoguen.Quadratic(atoms, hessian, geometry, cell)
-    pair_indices = [ # random atom indices in [0, 455]
-            (0, 1),
-            (234, 13),
-            (6, 450),
-            (2, 3),
-            ]
-    clist = [yoguen.Pair.get_pair(clustering, *pair) for pair in pair_indices]
-    smap = clustering.score_candidates(clist, quadratic, progress=False) # at 300 K
+    pairs = []
+    pairs.append(yoguen.Pair.get_pair(clustering, 0, 1))
+    pairs.append(yoguen.Pair.get_pair(clustering, 234, 13))
+    pairs.append(yoguen.Pair.get_pair(clustering, 6, 450))
+    pairs.append(yoguen.Pair.get_pair(clustering, 2, 3))
+    pairlist = yoguen.PairList(pairs)
+    scores = clustering.score_pairlist(
+            pairlist,
+            quadratic,
+            progress=False,
+            temperature=300,
+            )
 
     # do manual calculation using apply()
-    smap_manual = np.zeros(len(clist))
+    scores_manual = np.zeros(pairlist.npairs)
     indices = clustering.indices # keep track of original indices
-    for i, pair in enumerate(clist):
+    for i, pair in enumerate(pairlist):
         indices_ = pair.apply(indices)
         clustering.update_indices(indices_)
         entropies, _ = clustering.apply(quadratic)
-        smap_manual[i] = entropies[1]
+        scores_manual[i] = entropies[1]
         clustering.update_indices(indices) # revert back to default clustering
-    assert np.allclose(smap, smap_manual)
+    assert np.allclose(scores, scores_manual)
 
 
 def test_clustering_uio66(tmp_path):

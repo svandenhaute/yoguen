@@ -164,7 +164,7 @@ class Clustering(object):
                 atoms_reduced.get_cell(),
                 )
 
-    def score_candidates(self, clist, quadratic, temperature=300,
+    def score_pairlist(self, pairlist, quadratic, temperature=300,
             progress=False):
         """Computes the mapping entropy for each of the cluster pair
 
@@ -176,8 +176,8 @@ class Clustering(object):
         Arguments
         ---------
 
-        clist (list of ``Candidate`` subclass instances):
-            list of candidates
+        pairlist (``Pairlist`` instance):
+            pairlist for which scores should be calculated
 
         quadratic (``Quadratic`` instance):
             quadratic which describes the PES in the original degrees of
@@ -191,9 +191,11 @@ class Clustering(object):
             indicates the progress
 
         """
+        assert id(self.atoms) == id(quadratic.atoms)
+
         masses   = self.atoms.get_masses().copy()
         ncluster = self.get_ncluster()
-        smap     = np.zeros(len(clist))
+        smap     = np.zeros(pairlist.npairs)
 
         # precompute transformed hessian
         mass_weighting = np.linalg.inv(np.sqrt(get_mass_matrix(self.atoms)))
@@ -202,14 +204,14 @@ class Clustering(object):
 
         # add progress bar
         iterator = tqdm(
-                enumerate(clist),
-                total=len(clist),
-                unit='candidates',
+                enumerate(pairlist),
+                total=pairlist.npairs,
+                unit='pairs',
                 disable=not progress,
                 )
-        for k, candidate in iterator:
-            _indices = candidate.apply(self.indices) # obtain hypothet. indices
-            _masses     = np.zeros(ncluster - 1)
+        for k, pair in iterator:
+            _indices = pair.apply(self.indices) # obtain hypothet. indices
+            _masses = np.zeros(ncluster - 1)
             _projection = np.zeros((ncluster - 1, len(self.atoms)))
             for i, group in enumerate(_indices):
                 _masses[i] = np.sum(masses[np.array(group)])
@@ -302,9 +304,9 @@ class Clustering(object):
         """Returns a list of cluster identities
 
         Each identity is a tuple with two items. The first item is an integer
-        representing the cluster chemical element. This is a fictional
+        representing the cluster chemical element or type. This is a fictional
         association that is only used when saving the reduced representation
-        to a file format such as .xyz. The second item is a set of atomic
+        to a file format such as .xyz. The second item is a tuple of atomic
         numbers that are present in the cluster.
 
         The cluster chemical element is determined as follows
@@ -320,27 +322,31 @@ class Clustering(object):
         """
         if self.identities is None: # build cluster identities
             numbers = self.atoms.get_atomic_numbers()
-            random_cluster_number = 118 # assign cluster numbers start
+            type_counter = 118 # clusters are assigned starting at 118
             self.identities = []
             for i, group in enumerate(self.indices):
-                cluster_element = None
-                atomic_elements = None
+                type_ = None # type of cluster
+                atom_types = tuple(numbers[np.array(group)]) # types of atoms
                 if len(group) == 1: # if only one atom, then number is same
-                    atomic_elements = set([numbers[group[0]]])
-                    cluster_element = numbers[group[0]]
+                    type_ = numbers[group[0]]
                 else:
-                    atomic_elements = set(numbers[np.array(group)])
-                    for (_element, _elements) in self.identities:
-                        if atomic_elements == _elements:
-                            cluster_element = _element
-                    if cluster_element is None: # cluster not found
-                        cluster_element = random_cluster_number
-                        random_cluster_number -= 1
+                    # check for equality with previous identities by considering
+                    # sorted arrays of atom types
+                    for identity in self.identities:
+                        if len(atom_types) == len(identity[1]): # check length
+                            if np.allclose( # check types
+                                    np.sort(np.array(atom_types)),
+                                    np.sort(np.array(identity[1])),
+                                    ):
+                                type_ = identity[0]
+                    if type_ is None: # cluster not found
+                        type_ = type_counter
+                        type_counter -= 1
                         # avoid overlap;
-                        assert random_cluster_number > numbers.max()
-                assert cluster_element is not None
-                assert atomic_elements is not None
-                identity = tuple([cluster_element, set(atomic_elements)])
+                        assert type_counter > numbers.max()
+                assert type_ is not None
+                assert atom_types is not None
+                identity = tuple([type_, atom_types])
                 self.identities.append(identity)
         return list(self.identities) # return copy
 

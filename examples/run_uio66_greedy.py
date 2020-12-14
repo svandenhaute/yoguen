@@ -41,16 +41,15 @@ if __name__ == '__main__': # actual test
     geometry = system['geometry']
     cell     = system['cell']
     hessian  = system['hessian']
+    indices  = system['indices']
 
     quadratic = yoguen.Quadratic(atoms, hessian, geometry, cell)
-    generator = yoguen.PairGenerator(
-            cutoff=5, # cutoff radius in angstrom
-            max_neighbors=1, # starting from nearest neighbor
-            )
-    greducer = yoguen.GreedyReducer(
-            generator,
-            temperature=300, # temperature in kelvin
-            verbose=True, # suppress output
-            tol_score=1e-2, # group equivalent candidates
+    greducer  = yoguen.GreedyReducer(
+            cutoff=5,
+            max_neighbors=3,
+            temperature=300,
+            verbose=True,
+            tol_score=1e-2,
+            tol_distance=1e-2,
             )
     greducer(quadratic, 28, path_output=Path.cwd())

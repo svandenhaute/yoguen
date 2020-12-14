@@ -10,17 +10,14 @@ def test_greedy_reduce_uio66(tmp_path):
     geometry = system['geometry']
     cell     = system['cell']
     hessian  = system['hessian']
-    path_output = Path.cwd()
 
     quadratic = yoguen.Quadratic(atoms, hessian, geometry, cell)
-    generator = yoguen.PairGenerator(
-            cutoff=5, # cutoff radius in angstrom
-            max_neighbors=1, # starting from nearest neighbor
+    greducer  = yoguen.GreedyReducer(
+            cutoff=3,
+            max_neighbors=1,
+            temperature=300,
+            verbose=True,
+            tol_score=1e-2,
+            tol_distance=5e-3,
             )
-    greducer = yoguen.GreedyReducer(
-            generator,
-            temperature=300, # temperature in kelvin
-            verbose=True, # suppress output
-            tol_score=1e-3, # group equivalent candidates
-            )
-    greducer(quadratic, len(atoms) - 1, path_output=None)
+    greducer(quadratic, len(atoms) - 1, path_output=Path.cwd())
