@@ -43,6 +43,8 @@ if __name__ == '__main__': # actual test
     hessian  = system['hessian']
     indices  = system['indices']
 
+    clustering = yoguen.Clustering(atoms) # initialize clustering
+    #clustering.load_indices(Path.cwd() / 'indices
     quadratic = yoguen.Quadratic(atoms, hessian, geometry, cell)
     greducer  = yoguen.GreedyReducer(
             cutoff=5,

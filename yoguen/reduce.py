@@ -23,7 +23,8 @@ class GreedyReducer(object):
         self.tol_score     = tol_score
         self.tol_distance  = tol_distance
 
-    def __call__(self, quadratic, max_ncluster, path_output=None):
+    def __call__(self, quadratic, max_ncluster, clustering=None,
+            path_output=None):
         """Applies the greedy reduction to a ``Quadratic`` instance
 
         Arguments
@@ -36,11 +37,17 @@ class GreedyReducer(object):
             specifies the number of clusters below which the reduction is
             finished.
 
-        path_output (``pathlib.Path`` instance):
+        clustering (``Clustering`` instance, optional):
+            initial clustering to start from
+
+        path_output (``pathlib.Path`` instance, optional):
             directory to store output .pdb files to visualize progress
 
         """
-        clustering = Clustering(quadratic.atoms)
+        if clustering is None:
+            clustering = Clustering(quadratic.atoms)
+        else:
+            assert id(clustering.atoms) == id(quadratic.atoms)
         niter = 0  # tracks number of iterations
         smap  = [] # tracks smap for each pair
         logger.info('')
@@ -95,6 +102,9 @@ class GreedyReducer(object):
             if path_output is not None:
                 clustering.visualize(
                         path_output / ('clustering_' + str(niter) + '.pdb'),
+                        )
+                clustering.save_indices(
+                        path_output / ('indices_' + str(niter) + '.p'),
                         )
             niter += 1
             logger.info('')

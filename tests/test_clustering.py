@@ -78,19 +78,19 @@ def test_clustering_compute_loss_identical(tmp_path):
     assert abs(saa - entropies[0]) < 1e-8
 
 
-def test_get_atoms_reduced(tmp_path):
-    system   = get_system('uio66') # get system input
-    atoms    = system['atoms']
-    geometry = system['geometry']
-    cell     = system['cell']
-    hessian  = system['hessian']
-    indices  = system['indices']
-    clusters = system['clusters']
-    atoms.set_positions(geometry) # set atoms to minimum energy configuration
-    atoms.set_cell(cell)
-
-    clustering = yoguen.Clustering(atoms)
-    clustering.update_indices(indices)
-    atoms_reduced = clustering.get_atoms_reduced()
-    pos_reduced = atoms_reduced.get_positions()
-    assert np.all(np.abs(pos_reduced - clusters) < 1e-4)
+#def test_get_atoms_reduced(tmp_path):
+#    system   = get_system('uio66') # get system input
+#    atoms    = system['atoms']
+#    geometry = system['geometry']
+#    cell     = system['cell']
+#    hessian  = system['hessian']
+#    indices  = system['indices']
+#    clusters = system['clusters']
+#    #atoms.set_positions(geometry) # set atoms to minimum energy configuration
+#    #atoms.set_cell(cell)
+#
+#    clustering = yoguen.Clustering(atoms)
+#    clustering.update_indices(indices)
+#    atoms_reduced = clustering.get_atoms_reduced()
+#    pos_reduced = atoms_reduced.get_positions()
+#    assert np.all(np.abs(pos_reduced - clusters) < 1e-4)

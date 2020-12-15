@@ -1,4 +1,5 @@
 import ase
+import pickle
 import numpy as np
 
 from tqdm import tqdm
@@ -379,6 +380,22 @@ class Clustering(object):
                 assert self.clusters[i, j] == clusters_XYZ[3 * i + 2, 3 * j + 2]
         return True
 
+    def complete_clusters_by_translation(self):
+        """This function translates atoms to complete clusters"""
+        positions = self.atoms.get_positions()
+        for i, group in enumerate(self.indices):
+            index_ref = group[0] # reference atom for the deltas
+            pos_ref   = positions[index_ref]
+            for j in group[1:]:
+                delta = self.atoms.get_distance(
+                        index_ref,
+                        j,
+                        mic=True,
+                        vector=True,
+                        )
+                positions[j, :] = pos_ref + delta
+        self.atoms.set_positions(positions)
+
     def visualize(self, path_file):
         """Visualizes the current clustering configuration
 
@@ -398,18 +415,11 @@ class Clustering(object):
         _atoms.write(path_file)
         return _atoms
 
-    def complete_clusters_by_translation(self):
-        """This function translates atoms to complete clusters"""
-        positions = self.atoms.get_positions()
-        for i, group in enumerate(self.indices):
-            index_ref = group[0] # reference atom for the deltas
-            pos_ref   = positions[index_ref]
-            for j in group[1:]:
-                delta = self.atoms.get_distance(
-                        index_ref,
-                        j,
-                        mic=True,
-                        vector=True,
-                        )
-                positions[j, :] = pos_ref + delta
-        self.atoms.set_positions(positions)
+    def save_indices(self, path_file):
+        """Saves the current indices to a file"""
+        pickle.dump(self.indices, open(path_file, 'wb'))
+
+    def load_indices(self, path_file):
+        """Loads indices from a file"""
+        indices = pickle.load(open(path_file, 'rb'))
+        self.update_indices(indices)

@@ -273,10 +273,10 @@ class PairList(Candidate):
             index += 1
         if max_pairs is None:
             # modify remove pairs above index
-            self._pairs = self._pairs[:(index + 1)]
+            self._pairs = self._pairs[:index]
         else:
             # only include subset of pairs
-            self._pairs = self._pairs[:min(index + 1, max_pairs)]
+            self._pairs = self._pairs[:min(index, max_pairs)]
         self.npairs = len(self._pairs)
 
     def filter_disjunct(self):
