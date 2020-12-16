@@ -199,17 +199,14 @@ class PairList(Candidate):
             neighbors, _ = nlist.get_neighbors(i) # contains duplicates
             distances = np.array([atoms_reduced.get_distance(i, a, mic=True) for a in list(neighbors)])
             sorting = distances.argsort()
-            # start from nearest neighbors and add up to self.max_neighbors,
+            # start from nearest neighbors and consider up to max_neighbors,
             # but avoid duplicates
-            npairs_to_add = min(len(neighbors), max_neighbors)
-            npairs_added  = 0
-            for j in range(len(sorting)):
+            npairs_to_consider = min(len(neighbors), max_neighbors)
+            for j in range(npairs_to_consider): # only consider n nearest neighs
                 pair = [i, neighbors[sorting[j]]]
                 pair.sort()
-                if npairs_added < npairs_to_add:
-                    if tuple(pair) not in pair_tuples:
-                        pair_tuples.append(tuple(pair))
-                        npairs_added += 1
+                if tuple(pair) not in pair_tuples: # check for duplicates
+                    pair_tuples.append(tuple(pair))
 
         # generate list of Pair objects
         pairs = []

@@ -36,22 +36,30 @@ if __name__ == '__main__': # actual test
     logging.basicConfig(level=logging.INFO, format='%(name)s - %(message)s')
 
     # get system files to create quadratic and clustering
-    system = get_system()
+    system   = get_system()
     atoms    = system['atoms']
     geometry = system['geometry']
     cell     = system['cell']
     hessian  = system['hessian']
     indices  = system['indices']
 
-    clustering = yoguen.Clustering(atoms) # initialize clustering
-    #clustering.load_indices(Path.cwd() / 'indices
     quadratic = yoguen.Quadratic(atoms, hessian, geometry, cell)
     greducer  = yoguen.GreedyReducer(
-            cutoff=5,
-            max_neighbors=3,
+            cutoff=6,
+            max_neighbors=1,
             temperature=300,
             verbose=True,
             tol_score=1e-2,
-            tol_distance=1e-2,
+            tol_distance=5e-2,
             )
+    clustering = yoguen.Clustering(atoms) # initialize clustering
+    #entropies, _ = clustering.apply(quadratic, temperature=300)
+    #clustering.load_indices(Path.cwd() / 'indices_13.p')
     greducer(quadratic, 28, path_output=Path.cwd())
+
+    #pairlist = yoguen.PairList.generate(clustering, cutoff=3, max_neighbors=4)
+    #scores = clustering.score_pairlist(pairlist, quadratic, 300, progress=True)
+    #pairlist.add_scores(scores)
+    #pairlist.sort()
+    #pairlist.log()
+    #print(pairlist.npairs)

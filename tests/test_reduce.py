@@ -20,4 +20,4 @@ def test_greedy_reduce_uio66(tmp_path):
             tol_score=1e-2,
             tol_distance=5e-3,
             )
-    greducer(quadratic, len(atoms) - 1, path_output=Path.cwd())
+    greducer(quadratic, len(atoms) - 1)
